@@ -64,7 +64,7 @@ sub job_info {
 
   return undef unless $hash;
 
-  $DB::single = 1 if $NOW;
+#  $DB::single = 1 if $NOW;
 
   $hash->{args} = $hash->{args} ? decode_json($hash->{args}) : undef;
   $hash->{result} = $hash->{result} ? decode_json($hash->{result}) : undef;
