@@ -27,8 +27,6 @@ sub dequeue {
   my $timer = Mojo::IOLoop->timer($timeout => sub { Mojo::IOLoop->stop });
   Mojo::IOLoop->start;
 
-  sleep($timeout);
-
   return $self->_try($id);
 }
 
