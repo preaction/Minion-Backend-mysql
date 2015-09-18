@@ -9,23 +9,21 @@ use Sys::Hostname 'hostname';
 
 has 'mysql';
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
-####
 sub dequeue {
   my ($self, $id, $timeout) = @_;
 
   if ((my $job = $self->_try($id)) || Mojo::IOLoop->is_running) { return $job }
 
-###   my $db = $self->pg->db;
-###   $db->listen('minion.job')->on(notification => sub { Mojo::IOLoop->stop });
-###   my $timer = Mojo::IOLoop->timer($timeout => sub { Mojo::IOLoop->stop });
-###   Mojo::IOLoop->start;
-###   $db->unlisten('*') and Mojo::IOLoop->remove($timer);
-###   undef $db;
+  my $cb = $self->mysql->pubsub->listen("minion.job" => sub {
+    Mojo::IOLoop->stop;
+  });
 
   my $timer = Mojo::IOLoop->timer($timeout => sub { Mojo::IOLoop->stop });
   Mojo::IOLoop->start;
+
+  $self->mysql->pubsub->unlisten("minion.job" => $cb) and Mojo::IOLoop->remove($timer);
 
   return $self->_try($id);
 }
@@ -43,8 +41,11 @@ sub enqueue {
      values (?, (DATE_ADD(NOW(), INTERVAL $seconds SECOND)), ?, ?)",
      encode_json($args), $options->{priority} // 0, $task
   );
+  my $job_id = $db->dbh->{mysql_insertid};
 
-  return $db->dbh->{mysql_insertid};
+  $self->mysql->pubsub->notify("minion.job" => $job_id);
+
+  return $job_id;
 }
 
 sub fail_job   { shift->_update(1, @_) }
