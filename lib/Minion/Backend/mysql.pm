@@ -9,23 +9,24 @@ use Sys::Hostname 'hostname';
 
 has 'mysql';
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 sub dequeue {
-  my ($self, $id, $timeout) = @_;
+  my ($self, $id, $wait, $options) = @_;
 
-  if ((my $job = $self->_try($id)) || Mojo::IOLoop->is_running) { return $job }
+  if ((my $job = $self->_try($id, $options))) { return $job }
+  return undef if Mojo::IOLoop->is_running;
 
   my $cb = $self->mysql->pubsub->listen("minion.job" => sub {
     Mojo::IOLoop->stop;
   });
 
-  my $timer = Mojo::IOLoop->timer($timeout => sub { Mojo::IOLoop->stop });
+  my $timer = Mojo::IOLoop->timer($wait => sub { Mojo::IOLoop->stop });
   Mojo::IOLoop->start;
 
   $self->mysql->pubsub->unlisten("minion.job" => $cb) and Mojo::IOLoop->remove($timer);
 
-  return $self->_try($id);
+  return $self->_try($id, $options);
 }
 
 sub enqueue {
@@ -37,9 +38,10 @@ sub enqueue {
 
   my $seconds = $db->dbh->quote($options->{delay} // 0);
   $db->query(
-    "insert into minion_jobs (`args`, `delayed`, `priority`, `task`)
-     values (?, (DATE_ADD(NOW(), INTERVAL $seconds SECOND)), ?, ?)",
-     encode_json($args), $options->{priority} // 0, $task
+    "insert into minion_jobs (`args`, `delayed`, `priority`, `queue`, `task`)
+     values (?, (DATE_ADD(NOW(), INTERVAL $seconds SECOND)), ?, ?, ?)",
+     encode_json($args), $options->{priority} // 0, 
+    $options->{queue} // 'default', $task
   );
   my $job_id = $db->dbh->{mysql_insertid};
 
@@ -55,8 +57,8 @@ sub job_info {
   my $hash = shift->mysql->db->query(
     'select id, `args`, UNIX_TIMESTAMP(`created`) as `created`,
        UNIX_TIMESTAMP(`delayed`) as `delayed`,
-       UNIX_TIMESTAMP(`finished`) as `finished`, `priority`, `result`,
-       UNIX_TIMESTAMP(`retried`) as `retried`, `retries`,
+       UNIX_TIMESTAMP(`finished`) as `finished`, `priority`, `queue`, `result`,
+       UNIX_TIMESTAMP(`retried`) as `retried`, COALESCE(`retries`, 0) as retries,
        UNIX_TIMESTAMP(`started`) as `started`, `state`, `task`, `worker`
      from minion_jobs where id = ?', shift
   )->hash;
@@ -95,7 +97,6 @@ sub list_workers {
     ->arrays->map(sub { $self->worker_info($_->[0]) })->to_array;
 }
 
-#### TODO: migrations
 sub new {
   my $self = shift->SUPER::new(mysql => Mojo::mysql->new(@_));
   my $mysql = $self->mysql->max_connections(1);
@@ -166,18 +167,19 @@ sub reset {
 }
 
 sub retry_job {
-  my ($self, $id) = (shift, shift);
+  my ($self, $id, $retries) = (shift, shift, shift);
   my $options = shift // {};
 
   my $seconds = $self->mysql->db->dbh->quote($options->{delay} // 0);
 
   return !!$self->mysql->db->query(
     "update `minion_jobs`
-     set `finished` = 0, `result` = '', `retried` = now(),
+     set `finished` = 0, priority = coalesce(?, priority), 
+      `queue` = coalesce(?, queue), `result` = null, `retried` = now(),
        `retries` = retries + 1, `started` = 0, `state` = 'inactive',
        `worker` = null, `delayed` = (DATE_ADD(NOW(), INTERVAL $seconds SECOND))
-     where `id` = ? and `state` in ('failed', 'finished')",
-     $id
+     where `id` = ? and retries = ? and `state` in ('failed', 'finished')",
+     @$options{qw(priority queue)}, $id, $retries
   )->{affected_rows};
 }
 
@@ -237,19 +239,21 @@ sub worker_info {
 }
 
 sub _try {
-  my ($self, $id) = @_;
+  my ($self, $id, $options) = @_;
 
   my $tasks = [keys %{$self->minion->tasks}];
 
-  my $q = join(", ", map({ "?" } @{ $tasks }));
+  my $qq = join(", ", map({ "?" } @{ $options->{queues} // ['default'] }));
+  my $qt = join(", ", map({ "?" } @{ $tasks }));
 
   my $db = $self->mysql->db;
 
   my $tx = $db->begin;
-  my $job = $tx->db->query(qq(select id, args, task from minion_jobs
-    where state = 'inactive' and `delayed` <= NOW() and task in ($q)
+  my $job = $tx->db->query(qq(select id, args, retries, task from minion_jobs
+    where state = 'inactive' and `delayed` <= NOW() and queue in ($qq)
+    and task in ($qt)
     order by priority desc, created limit 1 for update), 
-    @{ $tasks }
+   @{ $options->{queues} || ['default']}, @{ $tasks }
   )->hash;
 
   return undef unless $job;
@@ -266,13 +270,14 @@ sub _try {
 }
 
 sub _update {
-  my ($self, $fail, $id, $result) = @_;
+  my ($self, $fail, $id, $retries, $result) = @_;
 
   return !!$self->mysql->db->query(
     "update minion_jobs
      set finished = now(), result = ?, state = ?
-     where id = ? and state = 'active'",
-     encode_json($result), $fail ? 'failed' : 'finished', $id
+     where id = ? and retries = ? and state = 'active'",
+     encode_json($result), $fail ? 'failed' : 'finished', $id,
+    $retries
   )->{affected_rows};
 }
 
@@ -333,9 +338,52 @@ implements the following new ones.
 =head2 dequeue
 
   my $job_info = $backend->dequeue($worker_id, 0.5);
+  my $job_info = $backend->dequeue($worker_id, 0.5, {queues => ['important']});
 
 Wait for job, dequeue it and transition from C<inactive> to C<active> state or
-return C<undef> if queue was empty.
+return C<undef> if queues were empty.
+
+These options are currently available:
+
+=over 2
+
+=item queues
+
+  queues => ['important']
+
+One or more queues to dequeue jobs from, defaults to C<default>.
+
+=back
+
+These fields are currently available:
+
+=over 2
+
+=item args
+
+  args => ['foo', 'bar']
+
+Job arguments.
+
+=item id
+
+  id => '10023'
+
+Job ID.
+
+=item retries
+
+  retries => 3
+
+Number of times job has been retried.
+
+=item task
+
+  task => 'foo'
+
+Task name.
+
+=back
 
 =head2 enqueue
 
@@ -361,21 +409,28 @@ Delay job for this many seconds (from now).
 
 Job priority, defaults to C<0>.
 
+=item queue
+
+  queue => 'important'
+
+Queue to put job in, defaults to C<default>.
+
 =back
 
 =head2 fail_job
 
-  my $bool = $backend->fail_job($job_id);
-  my $bool = $backend->fail_job($job_id, 'Something went wrong!');
-  my $bool = $backend->fail_job($job_id, {msg => 'Something went wrong!'});
+  my $bool = $backend->fail_job($job_id, $retries);
+  my $bool = $backend->fail_job($job_id, $retries, 'Something went wrong!');
+  my $bool = $backend->fail_job(
+    $job_id, $retries, {msg => 'Something went wrong!'});
 
 Transition from C<active> to C<failed> state.
 
 =head2 finish_job
 
-  my $bool = $backend->finish_job($job_id);
-  my $bool = $backend->finish_job($job_id, 'All went well!');
-  my $bool = $backend->finish_job($job_id, {msg => 'All went well!'});
+  my $bool = $backend->finish_job($job_id, $retries);
+  my $bool = $backend->finish_job($job_id, $retries, 'All went well!');
+  my $bool = $backend->finish_job($job_id, $retries, {msg => 'All went well!'});
 
 Transition from C<active> to C<finished> state.
 
@@ -397,49 +452,79 @@ These fields are currently available:
 
 =item args
 
+  args => ['foo', 'bar']
+
 Job arguments.
 
 =item created
+
+  created => 784111777
 
 Time job was created.
 
 =item delayed
 
+  delayed => 784111777
+
 Time job was delayed to.
 
 =item finished
+
+  finished => 784111777
 
 Time job was finished.
 
 =item priority
 
+  priority => 3
+
 Job priority.
 
+=item queue
+
+  queue => 'important'
+
+Queue name.
+
 =item result
+
+  result => 'All went well!'
 
 Job result.
 
 =item retried
 
+  retried => 784111777
+
 Time job has been retried.
 
 =item retries
+
+  retries => 3
 
 Number of times job has been retried.
 
 =item started
 
+  started => 784111777
+
 Time job was started.
 
 =item state
 
-Current job state.
+  state => 'inactive'
+
+Current job state, usually C<active>, C<failed>, C<finished> or C<inactive>.
 
 =item task
+
+  task => 'foo'
 
 Task name.
 
 =item worker
+
+  worker => '154'
 
 Id of worker that is processing the job.
 
@@ -509,8 +594,8 @@ Reset job queue.
 
 =head2 retry_job
 
-  my $bool = $backend->retry_job($job_id);
-  my $bool = $backend->retry_job($job_id, {delay => 10});
+  my $bool = $backend->retry_job($job_id, $retries);
+  my $bool = $backend->retry_job($job_id, $retries, {delay => 10});
 
 Transition from C<failed> or C<finished> state back to C<inactive>.
 
@@ -523,6 +608,18 @@ These options are currently available:
   delay => 10
 
 Delay job for this many seconds (from now).
+
+=item priority
+
+  priority => 5
+
+Job priority.
+
+=item queue
+
+  queue => 'important'
+
+Queue to put job in.
 
 =back
 
@@ -553,21 +650,31 @@ These fields are currently available:
 
 =item host
 
+  host => 'localhost'
+
 Worker host.
 
 =item jobs
+
+  jobs => ['10023', '10024', '10025', '10029']
 
 Ids of jobs the worker is currently processing.
 
 =item notified
 
+  notified => 784111777
+
 Last time worker sent a heartbeat.
 
 =item pid
 
+  pid => 12345
+
 Process id of worker.
 
 =item started
+
+  started => 784111777
 
 Time worker was started.
 
@@ -610,3 +717,9 @@ create table if not exists minion_workers (
 -- 1 down
 drop table if exists minion_jobs;
 drop table if exists minion_workers;
+
+-- 2 up
+create index minion_jobs_state_idx on minion_jobs (state);
+
+-- 3 up
+alter table minion_jobs add queue varchar(128) not null default 'default';
