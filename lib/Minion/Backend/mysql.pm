@@ -315,8 +315,7 @@ Minion::Backend::mysql - MySQL backend
 
 L<Minion::Backend::mysql> is a backend for L<Minion> based on L<Mojo::mysql>. All
 necessary tables will be created automatically with a set of migrations named
-C<minion>. Note that this backend uses many bleeding edge features, so only the
-latest, stable version of PostgreSQL is fully supported.
+C<minion>. This backend has been tested on v5.5 of MySQL.
 
 =head1 ATTRIBUTES
 
@@ -563,7 +562,7 @@ Returns the same information as L</"worker_info"> but in batches.
 
 =head2 new
 
-  my $backend = Minion::Backend::mysql->new('postgresql://postgres@/test');
+  my $backend = Minion::Backend::mysql->new('mysql://mysql@/test');
 
 Construct a new L<Minion::Backend::mysql> object.
 
