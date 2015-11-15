@@ -731,12 +731,12 @@ __DATA__
 -- 1 up
 create table if not exists minion_jobs (
 		`id`       serial not null primary key,
-		`args`     text not null,
+		`args`     blob not null,
 		`created`  timestamp not null default current_timestamp,
 		`delayed`  timestamp not null default current_timestamp,
 		`finished` timestamp null,
 		`priority` int not null,
-		`result`   text,
+		`result`   blob,
 		`retried`  timestamp null,
 		`retries`  int not null default 0,
 		`started`  timestamp null,
@@ -772,3 +772,8 @@ CREATE TABLE IF NOT EXISTS minion_workers_inbox (
   `message` BLOB NOT NULL
 );
 ALTER TABLE minion_jobs ADD COLUMN attempts INT NOT NULL DEFAULT 1;
+
+-- 5 up
+ALTER TABLE minion_jobs MODIFY COLUMN args BLOB NOT NULL;
+ALTER TABLE minion_jobs MODIFY COLUMN result BLOB;
+
