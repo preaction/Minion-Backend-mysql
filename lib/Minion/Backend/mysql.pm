@@ -243,6 +243,8 @@ sub _try {
 
   my $tasks = [keys %{$self->minion->tasks}];
 
+  return  unless @$tasks;
+
   my $qq = join(", ", map({ "?" } @{ $options->{queues} // ['default'] }));
   my $qt = join(", ", map({ "?" } @{ $tasks }));
 
