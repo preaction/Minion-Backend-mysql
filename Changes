@@ -1,5 +1,10 @@
 Revision history for Perl extension Minion::Backend::mysql.
 
+0.07
+
+    - Increased size of args/result fields to support jobs with more
+      information.
+
 0.06  2017-09-01
 
     - Partial support for Minion 7.0
