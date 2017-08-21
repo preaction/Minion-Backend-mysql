@@ -4,20 +4,25 @@ BEGIN { $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll' }
 
 use Test::More;
 
-plan skip_all => 'set TEST_ONLINE_MYSQL to enable this test' unless $ENV{TEST_ONLINE_MYSQL};
-
+use Test::mysqld;
 use Minion;
 use Mojo::IOLoop;
 use Sys::Hostname 'hostname';
 use Time::HiRes qw(time usleep);
 
+my $mysqld = Test::mysqld->new(
+  my_cnf => {
+    'skip-networking' => '', # no TCP socket
+  }
+) or plan skip_all => $Test::mysqld::errstr;
+
 # Clean up before start
 require Mojo::mysql;
-my $mysql = Mojo::mysql->new($ENV{TEST_ONLINE_MYSQL});
+my $mysql = Mojo::mysql->new( dsn => $mysqld->dsn( dbname => 'test' ));
 $mysql->db->query('drop table if exists mojo_migrations');
 $mysql->db->query('drop table if exists minion_jobs');
 $mysql->db->query('drop table if exists minion_workers');
-my $minion = Minion->new(mysql => $ENV{TEST_ONLINE_MYSQL});
+my $minion = Minion->new(mysql => dsn => $mysqld->dsn( dbname => 'test' ));
 $minion->reset;
 
 # Nothing to repair
@@ -31,7 +36,8 @@ my $notified = $worker->info->{notified};
 like $notified, qr/^[\d.]+$/, 'has timestamp';
 my $id = $worker->id;
 is $worker->register->id, $id, 'same id';
-ok $worker->register->info->{notified} > $notified, 'new timestamp';
+usleep 50000;
+cmp_ok $worker->register->info->{notified}, '>=', $notified, 'new timestamp';
 is $worker->unregister->info, undef, 'no information';
 my $host = hostname;
 is $worker->register->info->{host}, $host, 'right host';
@@ -279,7 +285,6 @@ ok !$job->retry, 'job not retried';
 is $job->id, $id, 'right id';
 ok !$job->remove, 'job has not been removed';
 ok $job->fail,  'job failed';
-$DB::single = 1;
 ok $job->retry, 'job retried';
 is $job->info->{retries}, 2, 'job has been retried twice';
 ok !$job->info->{finished}, 'no finished timestamp';
@@ -418,7 +423,7 @@ is $minion->job($id)->info->{state}, 'finished', 'right state';
 is_deeply $minion->job($id)->info->{result}, {added => 17}, 'right result';
 
 # Non-zero exit status
-$minion->add_task(exit => sub { exit 1 });
+$minion->add_task(exit => sub { POSIX::_exit( 1 ) });
 $id  = $minion->enqueue('exit');
 $job = $worker->register->dequeue(0);
 is $job->id, $id, 'right id';
@@ -477,5 +482,34 @@ is $minion->job($id4)->info->{result}, 'Non-zero exit status (1)',
   'right result';
 $worker->unregister;
 $minion->reset;
+
+# worker commands
+$worker  = $minion->worker->register->process_commands;
+$worker2 = $minion->worker->register;
+my @commands;
+$_->add_command(test_id => sub { push @commands, shift->id })
+  for $worker, $worker2;
+$worker->add_command(test_args => sub { shift and push @commands, [@_] })
+  ->register;
+ok $minion->backend->broadcast('test_id', [], [$worker->id]), 'sent command';
+ok $minion->backend->broadcast('test_id', [], [$worker->id, $worker2->id]),
+  'sent command';
+$worker->process_commands->register;
+$worker2->process_commands;
+is_deeply \@commands, [$worker->id, $worker->id, $worker2->id],
+  'right structure';
+@commands = ();
+ok $minion->backend->broadcast('test_id'),       'sent command';
+ok $minion->backend->broadcast('test_whatever'), 'sent command';
+ok $minion->backend->broadcast('test_args', [23], []), 'sent command';
+ok $minion->backend->broadcast('test_args', [1, [2], {3 => 'three'}],
+  [$worker->id]),
+  'sent command';
+$_->process_commands for $worker, $worker2;
+is_deeply \@commands,
+  [$worker->id, [23], [1, [2], {3 => 'three'}], $worker2->id],
+  'right structure';
+$_->unregister for $worker, $worker2;
+ok !$minion->backend->broadcast('test_id', []), 'command not sent';
 
 done_testing();

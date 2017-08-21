@@ -38,10 +38,10 @@ sub enqueue {
 
   my $seconds = $db->dbh->quote($options->{delay} // 0);
   $db->query(
-    "insert into minion_jobs (`args`, `delayed`, `priority`, `queue`, `task`)
-     values (?, (DATE_ADD(NOW(), INTERVAL $seconds SECOND)), ?, ?, ?)",
-     encode_json($args), $options->{priority} // 0, 
-    $options->{queue} // 'default', $task
+    "insert into minion_jobs (`args`, `attempts`, `delayed`, `priority`, `queue`, `task`)
+     values (?, ?, (DATE_ADD(NOW(), INTERVAL $seconds SECOND)), ?, ?, ?)",
+     encode_json($args), $options->{attempts} // 1,
+     $options->{priority} // 0, $options->{queue} // 'default', $task
   );
   my $job_id = $db->dbh->{mysql_insertid};
 
@@ -59,7 +59,7 @@ sub job_info {
        UNIX_TIMESTAMP(`delayed`) as `delayed`,
        UNIX_TIMESTAMP(`finished`) as `finished`, `priority`, `queue`, `result`,
        UNIX_TIMESTAMP(`retried`) as `retried`, COALESCE(`retries`, 0) as retries,
-       UNIX_TIMESTAMP(`started`) as `started`, `state`, `task`, `worker`
+       UNIX_TIMESTAMP(`started`) as `started`, `state`, `task`, `worker`, `attempts`
      from minion_jobs where id = ?', shift
   )->hash;
 
@@ -174,9 +174,9 @@ sub retry_job {
 
   return !!$self->mysql->db->query(
     "update `minion_jobs`
-     set `finished` = 0, priority = coalesce(?, priority), 
+     set `finished` = null, priority = coalesce(?, priority),
       `queue` = coalesce(?, queue), `result` = null, `retried` = now(),
-       `retries` = retries + 1, `started` = 0, `state` = 'inactive',
+       `retries` = retries + 1, `started` = null, `state` = 'inactive',
        `worker` = null, `delayed` = (DATE_ADD(NOW(), INTERVAL $seconds SECOND))
      where `id` = ? and retries = ? and `state` in ('failed', 'finished')",
      @$options{qw(priority queue)}, $id, $retries
@@ -271,14 +271,52 @@ sub _try {
 
 sub _update {
   my ($self, $fail, $id, $retries, $result) = @_;
-
-  return !!$self->mysql->db->query(
+  return undef unless $self->mysql->db->query(
     "update minion_jobs
      set finished = now(), result = ?, state = ?
      where id = ? and retries = ? and state = 'active'",
      encode_json($result), $fail ? 'failed' : 'finished', $id,
     $retries
   )->{affected_rows};
+  my $job = $self->job_info( $id );
+  return 1 if !$fail || (my $attempts = $job->{attempts}) == 1;
+  return 1 if $retries >= ( $attempts - 1 );
+  my $delay = $self->minion->backoff->( $retries );
+  return $self->retry_job( $id, $retries, { delay => $delay } );
+}
+
+sub broadcast {
+  my ($self, $command, $args, $ids) = (shift, shift, shift || [], shift || []);
+  my $message = encode_json( [ $command, @$args ] );
+  if ( !@$ids ) {
+    @$ids = map { $_->{id} }
+      @{ $self->mysql->db->query( 'SELECT id FROM minion_workers' )->hashes },
+  }
+  my $rows = 0;
+  for my $id ( @$ids ) {
+    $rows += $self->mysql->db->query(
+      'INSERT INTO minion_workers_inbox ( worker_id, message ) VALUES ( ?, ? )',
+      $id, $message,
+    )->rows;
+  }
+  return $rows;
+}
+
+sub receive {
+  my ($self, $worker_id) = @_;
+  #; use Data::Dumper;
+  my $rows = $self->mysql->db->query(
+    'SELECT id, message FROM minion_workers_inbox WHERE worker_id=?', $worker_id,
+  )->hashes;
+  return [] unless $rows && @$rows;
+  #; say Dumper $rows;
+  my @ids = map { $_->{id} } @$rows;
+  #; say Dumper \@ids;
+  $self->mysql->db->query(
+    'DELETE FROM minion_workers_inbox WHERE id IN (' . ( join ", ", ( '?' ) x @ids ) . ')',
+    @ids,
+  );
+  return [ map { decode_json( $_->{message} ) } @$rows ];
 }
 
 1;
@@ -692,14 +730,14 @@ __DATA__
 create table if not exists minion_jobs (
 		`id`       serial not null primary key,
 		`args`     text not null,
-		`created`  timestamp not null,
-		`delayed`  timestamp not null,
-		`finished` timestamp,
+		`created`  timestamp not null default current_timestamp,
+		`delayed`  timestamp not null default current_timestamp,
+		`finished` timestamp null,
 		`priority` int not null,
 		`result`   text,
-		`retried`  timestamp,
+		`retried`  timestamp null,
 		`retries`  int not null default 0,
-		`started`  timestamp,
+		`started`  timestamp null,
 		`state`    varchar(128) not null default 'inactive',
 		`task`     text not null,
 		`worker`   bigint
@@ -709,8 +747,8 @@ create table if not exists minion_workers (
 		`id`      serial not null primary key,
 		`host`    text not null,
 		`pid`     int not null,
-		`started` timestamp not null,
-		`notified` timestamp not null
+		`started` timestamp not null default current_timestamp,
+		`notified` timestamp not null default current_timestamp
 );
 
 -- 1 down
@@ -722,3 +760,13 @@ create index minion_jobs_state_idx on minion_jobs (state);
 
 -- 3 up
 alter table minion_jobs add queue varchar(128) not null default 'default';
+
+-- 4 up
+ALTER TABLE minion_workers MODIFY COLUMN started timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE minion_workers MODIFY COLUMN notified timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP;
+CREATE TABLE IF NOT EXISTS minion_workers_inbox (
+  `id` SERIAL NOT NULL PRIMARY KEY,
+  `worker_id` BIGINT UNSIGNED NOT NULL,
+  `message` BLOB NOT NULL
+);
+ALTER TABLE minion_jobs ADD COLUMN attempts INT NOT NULL DEFAULT 1;
