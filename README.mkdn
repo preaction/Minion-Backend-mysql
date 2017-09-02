@@ -4,7 +4,7 @@ Minion::Backend::mysql
 
 # VERSION
 
-version 0.07
+version 0.08
 
 # STATUS
 
@@ -388,9 +388,6 @@ These fields are currently available:
 # CONTRIBUTORS
 
 - Alexander Nalobin <nalobin@reg.ru>
-- Brian Medley <bpm@pxe-server.scnet.net>
-- Brian Medley <pub-github@bmedley.org>
-- Doug Bell <doug@preaction.me>
 - Olaf Alders <olaf@wundersolutions.com>
 - Zoffix Znet <cpan@zoffix.com>
 
