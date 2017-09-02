@@ -385,6 +385,15 @@ These fields are currently available:
 - Brian Medley <bpmedley@cpan.org>
 - Doug Bell <preaction@cpan.org>
 
+# CONTRIBUTORS
+
+- Alexander Nalobin <nalobin@reg.ru>
+- Brian Medley <bpm@pxe-server.scnet.net>
+- Brian Medley <pub-github@bmedley.org>
+- Doug Bell <doug@preaction.me>
+- Olaf Alders <olaf@wundersolutions.com>
+- Zoffix Znet <cpan@zoffix.com>
+
 # COPYRIGHT AND LICENSE
 
 This software is copyright (c) 2017 by Doug Bell and Brian Medley.
