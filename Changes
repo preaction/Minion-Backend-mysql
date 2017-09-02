@@ -1,5 +1,15 @@
 Revision history for Perl extension Minion::Backend::mysql.
 
+0.06  2017-09-01
+
+    - Partial support for Minion 7.0
+        - Automatic job retry
+        - Worker commands
+        - Missing features: job parents, locking, job notes
+      This is enough to boot Minion and run basic jobs. Any jobs that
+      depend on unimplemented features may not work correctly, and may
+      cause errors.
+
 0.04  After 0.03
 	- Support Minion 2.0
 
