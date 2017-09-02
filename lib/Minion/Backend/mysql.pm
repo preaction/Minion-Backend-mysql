@@ -9,7 +9,7 @@ use Sys::Hostname 'hostname';
 
 has 'mysql';
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 sub dequeue {
   my ($self, $id, $wait, $options) = @_;
