@@ -1,5 +1,7 @@
 Revision history for Perl extension Minion::Backend::mysql.
 
+{{ $NEXT }}
+
 0.09      2017-11-02 14:08:31-05:00 America/Chicago
 
   [Added]
