@@ -4,7 +4,7 @@ Minion::Backend::mysql
 
 # VERSION
 
-version 0.08
+version 0.09
 
 # STATUS
 
@@ -389,6 +389,7 @@ These fields are currently available:
 
 - Alexander Nalobin <nalobin@reg.ru>
 - Olaf Alders <olaf@wundersolutions.com>
+- Paul Cochrane <paul@liekut.de>
 - Zoffix Znet <cpan@zoffix.com>
 
 # COPYRIGHT AND LICENSE
