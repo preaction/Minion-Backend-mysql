@@ -34,7 +34,8 @@
          "requires" : {
             "Minion" : "7",
             "Mojo::mysql" : "1.04",
-            "Mojolicious" : "0"
+            "Mojolicious" : "0",
+            "perl" : "5.010"
          }
       },
       "test" : {
