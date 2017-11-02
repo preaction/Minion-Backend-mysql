@@ -47,7 +47,8 @@
             "IO::Handle" : "0",
             "IPC::Open3" : "0",
             "Test::More" : "0",
-            "Test::mysqld" : "0"
+            "Test::mysqld" : "0",
+            "Time::HiRes" : "0"
          }
       }
    },

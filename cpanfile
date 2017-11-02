@@ -9,6 +9,7 @@ on 'test' => sub {
   requires "IPC::Open3" => "0";
   requires "Test::More" => "0";
   requires "Test::mysqld" => "0";
+  requires "Time::HiRes" => "0";
 };
 
 on 'test' => sub {
