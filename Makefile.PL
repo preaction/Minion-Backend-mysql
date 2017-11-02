@@ -26,7 +26,8 @@ my %WriteMakefileArgs = (
     "IO::Handle" => 0,
     "IPC::Open3" => 0,
     "Test::More" => 0,
-    "Test::mysqld" => 0
+    "Test::mysqld" => 0,
+    "Time::HiRes" => 0
   },
   "VERSION" => "0.09",
   "test" => {
@@ -44,7 +45,8 @@ my %FallbackPrereqs = (
   "Mojo::mysql" => "1.04",
   "Mojolicious" => 0,
   "Test::More" => 0,
-  "Test::mysqld" => 0
+  "Test::mysqld" => 0,
+  "Time::HiRes" => 0
 );
 
 
