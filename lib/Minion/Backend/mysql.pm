@@ -334,16 +334,16 @@ Minion::Backend::mysql - MySQL backend
 =head1 SYNOPSIS
 
   use Mojolicious::Lite;
-  
+
   plugin Minion => {mysql => 'mysql://user@127.0.0.1/minion_jobs'};
-  
+
   # Slow task
   app->minion->add_task(poke_mojo => sub {
     my $job = shift;
     $job->app->ua->get('mojolicio.us');
     $job->app->log->debug('We have poked mojolicio.us for a visitor');
   });
-  
+
   # Perform job in a background worker process
   get '/' => sub {
     my $c = shift;
