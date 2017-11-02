@@ -1,5 +1,7 @@
 package Minion::Backend::mysql;
 
+use 5.010;
+
 use Mojo::Base 'Minion::Backend';
 
 use Mojo::IOLoop;

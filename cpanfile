@@ -1,6 +1,7 @@
 requires "Minion" => "7";
 requires "Mojo::mysql" => "1.04";
 requires "Mojolicious" => "0";
+requires "perl" => "5.010";
 
 on 'test' => sub {
   requires "ExtUtils::MakeMaker" => "0";
