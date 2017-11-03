@@ -17,7 +17,7 @@ sub dequeue {
   my ($self, $id, $wait, $options) = @_;
 
   if ((my $job = $self->_try($id, $options))) { return $job }
-  return undef if Mojo::IOLoop->is_running;
+  return if Mojo::IOLoop->is_running;
 
   my $cb = $self->mysql->pubsub->listen("minion.job" => sub {
     Mojo::IOLoop->stop;
@@ -65,7 +65,7 @@ sub job_info {
      from minion_jobs where id = ?', shift
   )->hash;
 
-  return undef unless $hash;
+  return unless $hash;
 
   $hash->{args} = $hash->{args} ? decode_json($hash->{args}) : undef;
   $hash->{result} = $hash->{result} ? decode_json($hash->{result}) : undef;
@@ -228,7 +228,7 @@ sub worker_info {
      where id = ?", $id
   )->hash;
 
-  return undef unless $hash;
+  return unless $hash;
 
   my $jobs = $self->mysql->db->query(
    "select `id` from `minion_jobs`
@@ -260,7 +260,7 @@ sub _try {
    @{ $options->{queues} || ['default']}, @{ $tasks }
   )->hash;
 
-  return undef unless $job;
+  return unless $job;
 
   $tx->db->query(
      qq(update minion_jobs set started = now(), state = 'active', worker = ? where id = ?), 
@@ -275,7 +275,7 @@ sub _try {
 
 sub _update {
   my ($self, $fail, $id, $retries, $result) = @_;
-  return undef unless $self->mysql->db->query(
+  return unless $self->mysql->db->query(
     "update minion_jobs
      set finished = now(), result = ?, state = ?
      where id = ? and retries = ? and state = 'active'",
