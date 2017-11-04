@@ -357,7 +357,7 @@ Minion::Backend::mysql - MySQL backend
 
 L<Minion::Backend::mysql> is a backend for L<Minion> based on L<Mojo::mysql>. All
 necessary tables will be created automatically with a set of migrations named
-C<minion>. This backend has been tested on v5.5 of MySQL.
+C<minion>. This backend requires at least v5.6.5 of MySQL.
 
 =head1 ATTRIBUTES
 
