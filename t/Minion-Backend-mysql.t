@@ -20,6 +20,10 @@ chomp( my $mysqld_version_info = qx{$mysqld->{mysqld} --version} );
 diag "Running tests with MySQL/MariaDB server version: ";
 diag $mysqld_version_info;
 
+my $dbh = DBI->connect($mysqld->dsn(dbname => 'test'));
+my $mysqld_version = $dbh->{mysql_serverversion};
+$mysqld_version >= 50605 or plan skip_all => 'Require at least MySQL 5.6.5';
+
 # Clean up before start
 require Mojo::mysql;
 my $mysql = Mojo::mysql->new( dsn => $mysqld->dsn( dbname => 'test' ));
