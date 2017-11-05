@@ -16,6 +16,10 @@ my $mysqld = Test::mysqld->new(
   }
 ) or plan skip_all => $Test::mysqld::errstr;
 
+chomp( my $mysqld_version_info = qx{$mysqld->{mysqld} --version} );
+diag "Running tests with MySQL/MariaDB server version: ";
+diag $mysqld_version_info;
+
 # Clean up before start
 require Mojo::mysql;
 my $mysql = Mojo::mysql->new( dsn => $mysqld->dsn( dbname => 'test' ));
