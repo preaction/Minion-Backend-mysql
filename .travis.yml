@@ -17,6 +17,8 @@ install:
     - sudo cp /etc/mysql/my.cnf /usr/share/mysql/my-default.cnf
     - dzil authordeps --missing | cpanm --no-skip-satisfied || { cat ~/.cpanm/build.log ; false ; }
     - dzil listdeps --author --missing | cpanm --no-skip-satisfied || { cat ~/.cpanm/build.log ; false ; }
+    - cpanm Devel::Cover Devel::Cover::Report::Coveralls Dist::Zilla::App::Command::cover || { cat ~/.cpanm/build.log ; false ; }
 
 script:
     - dzil test --author --release
+    - RELEASE_TESTING=1 AUTHOR_TESTING=1 dzil cover -report coveralls
