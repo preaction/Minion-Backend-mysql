@@ -5,7 +5,7 @@
       "Doug Bell <preaction@cpan.org>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 6.008, CPAN::Meta::Converter version 2.150010",
+   "generated_by" : "Dist::Zilla version 6.010, CPAN::Meta::Converter version 2.150010",
    "license" : [
       "perl_5"
    ],
@@ -56,7 +56,7 @@
    "provides" : {
       "Minion::Backend::mysql" : {
          "file" : "lib/Minion/Backend/mysql.pm",
-         "version" : "0.09"
+         "version" : "0.10"
       }
    },
    "release_status" : "stable",
@@ -72,7 +72,7 @@
       },
       "x_IRC" : "irc://irc.perl.org/#mojo"
    },
-   "version" : "0.09",
+   "version" : "0.10",
    "x_authority" : "cpan:PREACTION",
    "x_contributors" : [
       "Alexander Nalobin <nalobin@reg.ru>",

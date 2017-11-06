@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/paultcochrane/Minion-Backend-mysql.svg?branch=master)](https://travis-ci.org/paultcochrane/Minion-Backend-mysql)
-[![Coverage Status](https://coveralls.io/repos/paultcochrane/Minion-Backend-mysql/badge.svg?branch=master)](https://coveralls.io/r/paultcochrane/Minion-Backend-mysql?branch=master)
+[![Build Status](https://travis-ci.org/preaction/Minion-Backend-mysql.svg?branch=master)](https://travis-ci.org/preaction/Minion-Backend-mysql)
+[![Coverage Status](https://coveralls.io/repos/preaction/Minion-Backend-mysql/badge.svg?branch=master)](https://coveralls.io/r/preaction/Minion-Backend-mysql?branch=master)
 
 # NAME
 
@@ -7,8 +7,7 @@ Minion::Backend::mysql
 
 # VERSION
 
-version 0.09
-
+version 0.10
 
 # SYNOPSIS
 
