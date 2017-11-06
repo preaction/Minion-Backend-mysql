@@ -11,7 +11,7 @@ use Sys::Hostname 'hostname';
 
 has 'mysql';
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 sub dequeue {
   my ($self, $id, $wait, $options) = @_;
