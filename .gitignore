@@ -1,3 +1,4 @@
+.build/
 Minion-Backend-mysql-*
 MYMETA.json
 MYMETA.yml
