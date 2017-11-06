@@ -161,9 +161,9 @@ sub repair {
   );
 }
 
-sub reset { 
+sub reset {
     my $self = shift;
-    
+
     $self->mysql->db->query("truncate table minion_jobs");
     $self->mysql->db->query("truncate table minion_workers");
 }
@@ -222,7 +222,7 @@ sub worker_info {
   my ($self, $id) = @_;
 
   my $hash = $self->mysql->db->query(
-    "select `id`, UNIX_TIMESTAMP(`notified`) as `notified`, `host`, 
+    "select `id`, UNIX_TIMESTAMP(`notified`) as `notified`, `host`,
     `pid`, UNIX_TIMESTAMP(`started`) as `started`
      from `minion_workers`
      where id = ?", $id
@@ -256,14 +256,14 @@ sub _try {
   my $job = $tx->db->query(qq(select id, args, retries, task from minion_jobs
     where state = 'inactive' and `delayed` <= NOW() and queue in ($qq)
     and task in ($qt)
-    order by priority desc, created limit 1 for update), 
+    order by priority desc, created limit 1 for update),
    @{ $options->{queues} || ['default']}, @{ $tasks }
   )->hash;
 
   return undef unless $job;
 
   $tx->db->query(
-     qq(update minion_jobs set started = now(), state = 'active', worker = ? where id = ?), 
+     qq(update minion_jobs set started = now(), state = 'active', worker = ? where id = ?),
      $id, $job->{id}
   );
   $tx->commit;
