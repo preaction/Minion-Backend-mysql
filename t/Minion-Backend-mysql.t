@@ -98,7 +98,7 @@ my $finished = $minion->backend->mysql->db->query(
 )->hash->{finished};
 $minion->backend->mysql->db->query(
   'update minion_jobs set finished = FROM_UNIXTIME(?) where id = ?',
-  $finished - ($minion->remove_after + 1), $id2);
+  $finished - ($minion->remove_after + 3601), $id2);
 $finished = $minion->backend->mysql->db->query(
   'select UNIX_TIMESTAMP(finished) as finished
    from minion_jobs
@@ -106,7 +106,7 @@ $finished = $minion->backend->mysql->db->query(
 )->hash->{finished};
 $minion->backend->mysql->db->query(
   'update minion_jobs set finished = FROM_UNIXTIME(?) where id = ?',
-  $finished - ($minion->remove_after + 1), $id3);
+  $finished - ($minion->remove_after + 3601), $id3);
 $worker->unregister;
 $minion->repair;
 ok $minion->job($id), 'job has not been cleaned up';
