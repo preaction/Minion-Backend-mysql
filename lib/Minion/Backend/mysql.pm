@@ -76,7 +76,6 @@ sub list_jobs {
   }
 
   my $where = @where ? 'WHERE ' . join( ' AND ', @where ) : '';
-  # XXX: Job children/parents not supported
   # XXX: notes column missing
   my $jobs = $self->mysql->db->query(
     "SELECT
@@ -93,7 +92,10 @@ sub list_jobs {
     LIMIT ?
     OFFSET ?", @params, $limit, $offset,
   )->hashes;
-  $jobs->map( _decode_json_fields(qw{ args result }) );
+  $jobs->map( _decode_json_fields(qw{ args result }) )
+    # XXX: Job children/parents not supported
+    # Add fake arrayrefs to make the Minion UI work
+    ->map( sub { $_[0]->{parents} = $_[0]->{children} = []; return $_[0] } );
 
   my $total = $self->mysql->db->query(
     'SELECT COUNT(*) AS count FROM minion_jobs',
@@ -113,6 +115,7 @@ sub _decode_json_fields {
       next unless $hash->{ $field };
       $hash->{ $field } = decode_json( $hash->{ $field } );
     }
+    return $hash;
   };
 }
 
