@@ -154,7 +154,11 @@ sub list_workers {
 }
 
 sub new {
-  my $self = shift->SUPER::new(mysql => Mojo::mysql->new(@_));
+  my ( $class, @args ) = @_;
+  if ( ref $args[0] eq 'HASH' ) {
+    @args = %{ $args[0] };
+  }
+  my $self = $class->SUPER::new(mysql => Mojo::mysql->new(@args));
   my $mysql = $self->mysql->max_connections(1);
   $mysql->migrations->name('minion')->from_data;
   $mysql->once(connection => sub { shift->migrations->migrate });
