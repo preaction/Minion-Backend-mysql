@@ -31,7 +31,7 @@ before_install:
     - if [ x"$MYSQL_VERSION" != "x" ];
       then
         sudo apt-key adv --keyserver pgp.mit.edu --recv-keys 5072E1F5;
-        cat /etc/issue
+        cat /etc/issue;
       fi
 
 install:
