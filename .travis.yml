@@ -38,6 +38,7 @@ before_install:
         sudo DEBIAN_FRONTEND=noninteractive apt-get -q --yes --fix-broken --allow-unauthenticated --option DPkg::Options::=--force-confnew install mysql-server;
         echo "upgrading mysql";
         sudo mysql_upgrade -u root --password='' --force;
+        sudo service mysqld restart;
       fi
 
 install:
