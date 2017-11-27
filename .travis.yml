@@ -28,7 +28,7 @@ matrix:
           # - perl: "5.10"
 
 before_install:
-    - if [ x"$MYSQL_VERSION" != "x" ];
+    - if [[ x"$MYSQL_VERSION" != "x" ]];
       then
         sudo service mysql stop;
         sudo apt-key adv --keyserver pgp.mit.edu --recv-keys 5072E1F5;
