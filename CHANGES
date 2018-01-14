@@ -2,6 +2,11 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Fixed all the missing features from the backend to fully-support
+    Minion 8.
+
 0.11      2017-11-18 13:43:48-06:00 America/Chicago
 
   [Fixed]
