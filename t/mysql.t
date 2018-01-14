@@ -32,11 +32,11 @@ my $worker = $minion->repair->worker;
 isa_ok $worker->minion->app, 'Mojolicious', 'has default application';
 
 # Migrate up and down
-is $minion->backend->mysql->migrations->active, 18, 'active version is 18';
+is $minion->backend->mysql->migrations->active, 6, 'active version is 6';
 is $minion->backend->mysql->migrations->migrate(0)->active, 0,
   'active version is 0';
-is $minion->backend->mysql->migrations->migrate->active, 18,
-  'active version is 18';
+is $minion->backend->mysql->migrations->migrate->active, 6,
+  'active version is 6';
 
 # Register and unregister
 $worker->register;
@@ -45,8 +45,8 @@ my $notified = $worker->info->{notified};
 like $notified, qr/^[\d.]+$/, 'has timestamp';
 my $id = $worker->id;
 is $worker->register->id, $id, 'same id';
-usleep 50000;
-ok $worker->register->info->{notified} > $notified, 'new timestamp';
+sleep 1;
+cmp_ok $worker->register->info->{notified}, '>', $notified, 'new timestamp';
 is $worker->unregister->info, undef, 'no information';
 my $host = hostname;
 is $worker->register->info->{host}, $host, 'right host';
@@ -418,7 +418,7 @@ is $minion->stats->{delayed_jobs}, 1, 'one delayed job';
 is $worker->register->dequeue(0), undef, 'too early for job';
 ok $minion->job($id)->info->{delayed} > time, 'delayed timestamp';
 $minion->backend->mysql->db->query(
-  "update minion_jobs set delayed = DATE_SUB( now(), interval 1 day ) where id = ?",
+  "update minion_jobs set `delayed` = DATE_SUB( now(), interval 1 day ) where id = ?",
   $id);
 $job = $worker->dequeue(0);
 is $job->id, $id, 'right id';
@@ -574,7 +574,7 @@ is $minion->job($id)->info->{state}, 'finished', 'right state';
 is_deeply $minion->job($id)->info->{result}, {added => 17}, 'right result';
 
 # Non-zero exit status
-$minion->add_task(exit => sub { exit 1 });
+$minion->add_task(exit => sub { POSIX::_exit( 1 ) });
 $id  = $minion->enqueue('exit');
 $job = $worker->register->dequeue(0);
 is $job->id, $id, 'right id';
@@ -602,7 +602,7 @@ is $info->{state},    'inactive',                 'right state';
 is $info->{result},   'Non-zero exit status (1)', 'right result';
 ok $info->{retried} < $job->info->{delayed}, 'delayed timestamp';
 $minion->backend->mysql->db->query(
-  'update minion_jobs set delayed = now() where id = ?', $id);
+  'update minion_jobs set `delayed` = now() where id = ?', $id);
 $job = $worker->register->dequeue(0);
 is $job->id, $id, 'right id';
 is $job->retries, 1, 'job has been retried once';
@@ -634,7 +634,7 @@ is $job->info->{state},  'inactive',         'right state';
 is $job->info->{result}, 'Worker went away', 'right result';
 ok $job->info->{retried} < $job->info->{delayed}, 'delayed timestamp';
 $minion->backend->mysql->db->query(
-  'update minion_jobs set delayed = now() where id = ?', $id);
+  'update minion_jobs set `delayed` = now() where id = ?', $id);
 $job = $worker->register->dequeue(0);
 is $job->id, $id, 'right id';
 is $job->retries, 1, 'job has been retried once';
@@ -812,3 +812,5 @@ $_->unregister for $worker, $worker2;
 ok !$minion->backend->broadcast('test_id', []), 'command not sent';
 
 done_testing();
+
+$mysqld->stop;
