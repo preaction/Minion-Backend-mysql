@@ -188,6 +188,32 @@ sub list_workers {
   };
 }
 
+sub list_locks {
+  my ($self, $offset, $limit, $options) = @_;
+
+  my ( @where, @params );
+  if ( my $ids = $options->{ids} ) {
+    push @where, 'id in (' . join( ',', ('?') x @{$options->{ids}} ) . ')';
+    push @params, @{ $options->{ids} };
+  }
+
+  my $where = @where ? 'WHERE ' . join ' AND ', @where : '';
+  my $sql = "SELECT
+    id, name, UNIX_TIMESTAMP(expires) AS expires
+  FROM minion_locks $where ORDER BY id DESC LIMIT ? OFFSET ?";
+  my $locks = $self->mysql->db->query($sql, @params, $limit, $offset)
+    ->hashes;
+
+  my $total = $self->mysql->db->query(
+    'SELECT COUNT(*) AS count FROM minion_locks',
+  )->hash->{count};
+
+  return {
+    locks => $locks,
+    total => $total,
+  };
+}
+
 sub new {
   my ( $class, @args ) = @_;
   if ( ref $args[0] eq 'HASH' ) {
