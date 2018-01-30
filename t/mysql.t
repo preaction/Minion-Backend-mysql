@@ -21,8 +21,8 @@ diag "Running tests with MySQL/MariaDB server version: ";
 diag $mysqld_version_info;
 
 my $dbh = DBI->connect($mysqld->dsn(dbname => 'test'));
-#my $mysqld_version = $dbh->{mysql_serverversion};
-#$mysqld_version >= 50605 or plan skip_all => 'Require at least MySQL 5.6.5';
+my $mysqld_version = $dbh->{mysql_serverversion};
+$mysqld_version >= 50605 or plan skip_all => 'Require at least MySQL 5.6.5';
 
 my $minion = Minion->new(mysql => dsn => $mysqld->dsn( dbname => 'test' ));
 $minion->reset;
