@@ -192,21 +192,26 @@ sub list_locks {
   my ($self, $offset, $limit, $options) = @_;
 
   my ( @where, @params );
-  if ( my $ids = $options->{ids} ) {
-    push @where, 'id in (' . join( ',', ('?') x @{$options->{ids}} ) . ')';
-    push @params, @{ $options->{ids} };
+  if ( $options->{name} ) {
+    push @where, 'name = ?';
+    push @params, $options->{name};
   }
+
+  push @where, 'expires > now()';
 
   my $where = @where ? 'WHERE ' . join ' AND ', @where : '';
   my $sql = "SELECT
-    id, name, UNIX_TIMESTAMP(expires) AS expires
-  FROM minion_locks $where ORDER BY id DESC LIMIT ? OFFSET ?";
-  my $locks = $self->mysql->db->query($sql, @params, $limit, $offset)
-    ->hashes;
+          id, name, UNIX_TIMESTAMP(expires) AS expires
+      FROM minion_locks
+      $where
+      ORDER BY id
+      DESC LIMIT ? OFFSET ?";
+
+  my $locks = $self->mysql->db->query($sql, @params, $limit || 0, $offset || 0)->hashes;
 
   my $total = $self->mysql->db->query(
-    'SELECT COUNT(*) AS count FROM minion_locks',
-  )->hash->{count};
+    "SELECT COUNT(name) AS total FROM minion_locks $where", @params
+  )->hash->{total};
 
   return {
     locks => $locks,
@@ -362,6 +367,7 @@ sub stats {
     finished_jobs    => $states->{finished} || 0,
     enqueued_jobs    => $states->{enqueued_jobs} || 0,
     delayed_jobs     => $states->{delayed_jobs} || 0,
+    active_locks     => $states->{active_locks} || 0,
     uptime           => $uptime || 0,
   };
 }
