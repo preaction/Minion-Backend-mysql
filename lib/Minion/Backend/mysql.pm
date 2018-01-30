@@ -351,6 +351,7 @@ sub stats {
       FROM minion_jobs
     };
   %$states = ( %$states, %{ $db->query($sql)->hash } );
+  $states->{active_locks} = $db->query("SELECT COUNT(*) FROM minion_locks WHERE expires > now()")->array->[0];
 
   return {
     active_workers   => $active,

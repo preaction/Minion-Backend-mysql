@@ -198,8 +198,8 @@ is $results->{locks}[1]{name},      'yada',       'right name';
 like $results->{locks}[1]{expires}, qr/^[\d.]+$/, 'expires';
 is $results->{locks}[2], undef, 'no more locks';
 is $results->{total}, 2, 'two results';
-$minion->backend->pg->db->query(
-  "update minion_locks set expires = now() - interval '1 second' * 1
+$minion->backend->mysql->db->query(
+  "update minion_locks set expires = subtime(now(), '00:00:01')
    where name = 'yada'",
 );
 is $minion->backend->list_locks(0, 10, {name => 'yada'})->{total}, 0,
