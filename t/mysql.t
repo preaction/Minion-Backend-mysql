@@ -21,8 +21,8 @@ diag "Running tests with MySQL/MariaDB server version: ";
 diag $mysqld_version_info;
 
 my $dbh = DBI->connect($mysqld->dsn(dbname => 'test'));
-my $mysqld_version = $dbh->{mysql_serverversion};
-$mysqld_version >= 50605 or plan skip_all => 'Require at least MySQL 5.6.5';
+#my $mysqld_version = $dbh->{mysql_serverversion};
+#$mysqld_version >= 50605 or plan skip_all => 'Require at least MySQL 5.6.5';
 
 my $minion = Minion->new(mysql => dsn => $mysqld->dsn( dbname => 'test' ));
 $minion->reset;
@@ -173,6 +173,39 @@ ok $minion->unlock('bar'), 'unlocked again';
 ok !$minion->unlock('bar'), 'not unlocked again';
 ok $minion->unlock('baz'), 'unlocked';
 ok !$minion->unlock('baz'), 'not unlocked again';
+
+# List locks
+is $minion->stats->{active_locks}, 1, 'one active lock';
+$results = $minion->backend->list_locks(0, 2);
+is $results->{locks}[0]{name},      'yada',       'right name';
+like $results->{locks}[0]{expires}, qr/^[\d.]+$/, 'expires';
+is $results->{locks}[1], undef, 'no more locks';
+is $results->{total}, 1, 'one result';
+$minion->unlock('yada');
+$minion->lock('yada', 3600, {limit => 2});
+$minion->lock('test', 3600, {limit => 1});
+$minion->lock('yada', 3600, {limit => 2});
+is $minion->stats->{active_locks}, 3, 'three active locks';
+$results = $minion->backend->list_locks(1, 1);
+is $results->{locks}[0]{name},      'test',       'right name';
+like $results->{locks}[0]{expires}, qr/^[\d.]+$/, 'expires';
+is $results->{locks}[1], undef, 'no more locks';
+is $results->{total}, 3, 'three results';
+$results = $minion->backend->list_locks(0, 10, {name => 'yada'});
+is $results->{locks}[0]{name},      'yada',       'right name';
+like $results->{locks}[0]{expires}, qr/^[\d.]+$/, 'expires';
+is $results->{locks}[1]{name},      'yada',       'right name';
+like $results->{locks}[1]{expires}, qr/^[\d.]+$/, 'expires';
+is $results->{locks}[2], undef, 'no more locks';
+is $results->{total}, 2, 'two results';
+$minion->backend->pg->db->query(
+  "update minion_locks set expires = now() - interval '1 second' * 1
+   where name = 'yada'",
+);
+is $minion->backend->list_locks(0, 10, {name => 'yada'})->{total}, 0,
+  'no results';
+$minion->unlock('test');
+is $minion->backend->list_locks(0, 10)->{total}, 0, 'no results';
 
 # Lock with guard
 ok my $guard = $minion->guard('foo', 3600, {limit => 1}), 'locked';
