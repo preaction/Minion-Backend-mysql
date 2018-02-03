@@ -2,6 +2,11 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Added]
+
+  - Added `list_locks` method so that the Minion admin UI works. Thanks
+    @pentabion! [Github #17]
+
 0.12      2018-01-14 01:22:07-06:00 America/Chicago
 
   [Fixed]
