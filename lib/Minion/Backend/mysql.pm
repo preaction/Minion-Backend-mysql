@@ -721,7 +721,7 @@ Id of worker that is processing the job.
 =head2 list_jobs
 
   my $batch = $backend->list_jobs($offset, $limit);
-  my $batch = $backend->list_jobs($offset, $limit, {state => 'inactive'});
+  my $batch = $backend->list_jobs($offset, $limit, {states => 'inactive'});
 
 Returns the same information as L</"job_info"> but in batches.
 
