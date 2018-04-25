@@ -91,7 +91,7 @@ sub list_jobs {
   }
   if ( my $tasks = $options->{tasks} ) {
     push @where, 'task in (' . join( ',', ('?') x @$tasks ) . ')';
-    push @params, @tasks;
+    push @params, @$tasks;
   }
   if ( my $ids = $options->{ids} ) {
     push @where, 'id in (' . join( ',', ('?') x @$ids ) . ')';
