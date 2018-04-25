@@ -7,7 +7,7 @@ Minion::Backend::mysql
 
 # VERSION
 
-version 0.12
+version 0.13
 
 # SYNOPSIS
 
@@ -387,6 +387,7 @@ These fields are currently available:
 # CONTRIBUTORS
 
 - Alexander Nalobin <nalobin@reg.ru>
+- Dmitry Krylov <pentabion@gmail.com>
 - Olaf Alders <olaf@wundersolutions.com>
 - Paul Cochrane <paul@liekut.de>
 - Zoffix Znet <cpan@zoffix.com>
