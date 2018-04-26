@@ -62,12 +62,14 @@ sub enqueue {
 }
 
 sub note {
-  my ($self, $id, $key, $value) = @_;
+  my ($self, $id, $merge) = @_;
   my $job = $self->mysql->db->query(
     'SELECT notes FROM minion_jobs WHERE id=?', $id,
   )->hash || return 0;
   my $notes = decode_json( $job->{notes} );
-  $notes->{ $key } = $value;
+  foreach my $key (keys %$merge){
+      $notes->{ $key } = $merge->{$key};
+  }
   return !!$self->mysql->db->query(
     'UPDATE minion_jobs SET notes = ? WHERE id = ?',
     encode_json( $notes ), $id,
@@ -192,9 +194,10 @@ sub list_locks {
   my ($self, $offset, $limit, $options) = @_;
 
   my ( @where, @params );
-  if ( $options->{name} ) {
-    push @where, 'name = ?';
-    push @params, $options->{name};
+  if ( my $name = $options->{names} // $options->{name} ) {
+    my @names = ref $name eq 'ARRAY' ? @$name : ( $name );
+    push @where, 'name in (' . join( ',', ('?') x @names ) . ')';
+    push @params, @names;
   }
 
   push @where, 'expires > now()';

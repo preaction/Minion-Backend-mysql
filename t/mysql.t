@@ -191,7 +191,7 @@ is $results->{locks}[0]{name},      'test',       'right name';
 like $results->{locks}[0]{expires}, qr/^[\d.]+$/, 'expires';
 is $results->{locks}[1], undef, 'no more locks';
 is $results->{total}, 3, 'three results';
-$results = $minion->backend->list_locks(0, 10, {name => 'yada'});
+$results = $minion->backend->list_locks(0, 10, {names => ['yada']});
 is $results->{locks}[0]{name},      'yada',       'right name';
 like $results->{locks}[0]{expires}, qr/^[\d.]+$/, 'expires';
 is $results->{locks}[1]{name},      'yada',       'right name';
@@ -202,7 +202,7 @@ $minion->backend->mysql->db->query(
   "update minion_locks set expires = subtime(now(), '00:00:01')
    where name = 'yada'",
 );
-is $minion->backend->list_locks(0, 10, {name => 'yada'})->{total}, 0,
+is $minion->backend->list_locks(0, 10, {names => ['yada']})->{total}, 0,
   'no results';
 $minion->unlock('test');
 is $minion->backend->list_locks(0, 10)->{total}, 0, 'no results';
@@ -589,7 +589,7 @@ $job = $worker->register->dequeue(0);
 $job->perform;
 is $job->info->{state}, 'finished', 'right state';
 ok $job->note(yada => ['works']), 'added metadata';
-ok !$minion->backend->note(-1, yada => ['failed']), 'not added metadata';
+ok !$minion->backend->note(-1, {yada => ['failed']}), 'not added metadata';
 my $notes = {
   foo => [4, 5, 6],
   bar  => {baz => [1, 2, 3]},
