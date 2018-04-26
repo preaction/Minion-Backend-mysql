@@ -81,21 +81,25 @@ sub list_jobs {
   my ($self, $offset, $limit, $options) = @_;
 
   my ( @where, @params );
-  if ( my $states = $options->{states} ) {
-    push @where, 'state in (' . join( ',', ('?') x @$states ) . ')';
-    push @params, @$states;
+  if ( my $state = $options->{states} // $options->{state} ) {
+    my @states = ref $state eq 'ARRAY' ? @$state : ( $state );
+    push @where, 'state in (' . join( ',', ('?') x @states ) . ')';
+    push @params, @states;
   }
-  if ( my $queues = $options->{queues} ) {
-    push @where, 'queue in (' . join( ',', ('?') x @$queues ) . ')';
-    push @params, @$queues;
+  if ( my $queue = $options->{queues} // $options->{queue} ) {
+    my @queues = ref $queue eq 'ARRAY' ? @$queue : ( $queue );
+    push @where, 'queue in (' . join( ',', ('?') x @queues ) . ')';
+    push @params, @queues;
   }
-  if ( my $tasks = $options->{tasks} ) {
-    push @where, 'task in (' . join( ',', ('?') x @$tasks ) . ')';
-    push @params, @$tasks;
+  if ( my $task = $options->{tasks} // $options->{task} ) {
+    my @tasks = ref $task eq 'ARRAY' ? @$task : ( $task );
+    push @where, 'task in (' . join( ',', ('?') x @tasks ) . ')';
+    push @params, @tasks;
   }
-  if ( my $ids = $options->{ids} ) {
-    push @where, 'id in (' . join( ',', ('?') x @$ids ) . ')';
-    push @params, @$ids;
+  if ( my $id = $options->{ids} // $options->{id} ) {
+    my @ids = ref $id eq 'ARRAY' ? @$id : ( $id );
+    push @where, 'id in (' . join( ',', ('?') x @ids ) . ')';
+    push @params, @ids;
   }
 
   my $where = @where ? 'WHERE ' . join( ' AND ', @where ) : '';
