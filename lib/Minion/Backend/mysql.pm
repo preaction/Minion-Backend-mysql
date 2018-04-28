@@ -31,6 +31,26 @@ sub dequeue {
   return $self->_try($id, $options);
 }
 
+sub history {
+  my $self = shift;
+
+  my $sql = <<SQL;
+SELECT
+  MIN(UNIX_TIMESTAMP(finished)) as `epoch`,
+  DAY(finished) as `day`,
+  HOUR(finished) as `hour`,
+  SUM(CASE state WHEN 'failed' THEN 1 ELSE 0 END) AS failed_jobs,
+  SUM(CASE state WHEN 'finished' THEN 1 ELSE 0 END) AS finished_jobs
+FROM minion_jobs
+WHERE finished > SUBTIME(NOW(), '23:00:00')
+GROUP BY `day`, `hour`
+ORDER BY `day`, `hour`
+SQL
+
+  my $data = $self->mysql->db->query($sql)->hashes;
+  return {daily => $data};
+}
+
 sub enqueue {
   my ($self, $task) = (shift, shift);
   my $args    = shift // [];
@@ -62,14 +82,12 @@ sub enqueue {
 }
 
 sub note {
-  my ($self, $id, $merge) = @_;
+  my ($self, $id, $key, $value) = @_;
   my $job = $self->mysql->db->query(
     'SELECT notes FROM minion_jobs WHERE id=?', $id,
   )->hash || return 0;
   my $notes = decode_json( $job->{notes} );
-  foreach my $key (keys %$merge){
-      $notes->{ $key } = $merge->{$key};
-  }
+  $notes->{ $key } = $value;
   return !!$self->mysql->db->query(
     'UPDATE minion_jobs SET notes = ? WHERE id = ?',
     encode_json( $notes ), $id,
@@ -83,25 +101,21 @@ sub list_jobs {
   my ($self, $offset, $limit, $options) = @_;
 
   my ( @where, @params );
-  if ( my $state = $options->{states} // $options->{state} ) {
-    my @states = ref $state eq 'ARRAY' ? @$state : ( $state );
-    push @where, 'state in (' . join( ',', ('?') x @states ) . ')';
-    push @params, @states;
+  if ( my $states = $options->{states} ) {
+    push @where, 'state in (' . join( ',', ('?') x @$states ) . ')';
+    push @params, @$states;
   }
-  if ( my $queue = $options->{queues} // $options->{queue} ) {
-    my @queues = ref $queue eq 'ARRAY' ? @$queue : ( $queue );
-    push @where, 'queue in (' . join( ',', ('?') x @queues ) . ')';
-    push @params, @queues;
+  if ( my $queues = $options->{queues} ) {
+    push @where, 'queue in (' . join( ',', ('?') x @$queues ) . ')';
+    push @params, @$queues;
   }
-  if ( my $task = $options->{tasks} // $options->{task} ) {
-    my @tasks = ref $task eq 'ARRAY' ? @$task : ( $task );
-    push @where, 'task in (' . join( ',', ('?') x @tasks ) . ')';
-    push @params, @tasks;
+  if ( my $tasks = $options->{tasks} ) {
+    push @where, 'task in (' . join( ',', ('?') x @$tasks ) . ')';
+    push @params, @$tasks;
   }
-  if ( my $id = $options->{ids} // $options->{id} ) {
-    my @ids = ref $id eq 'ARRAY' ? @$id : ( $id );
-    push @where, 'id in (' . join( ',', ('?') x @ids ) . ')';
-    push @params, @ids;
+  if ( my $ids = $options->{ids} ) {
+    push @where, 'id in (' . join( ',', ('?') x @$ids ) . ')';
+    push @params, @$ids;
   }
 
   my $where = @where ? 'WHERE ' . join( ' AND ', @where ) : '';
@@ -194,10 +208,9 @@ sub list_locks {
   my ($self, $offset, $limit, $options) = @_;
 
   my ( @where, @params );
-  if ( my $name = $options->{names} // $options->{name} ) {
-    my @names = ref $name eq 'ARRAY' ? @$name : ( $name );
-    push @where, 'name in (' . join( ',', ('?') x @names ) . ')';
-    push @params, @names;
+  if ( $options->{name} ) {
+    push @where, 'name = ?';
+    push @params, $options->{name};
   }
 
   push @where, 'expires > now()';
