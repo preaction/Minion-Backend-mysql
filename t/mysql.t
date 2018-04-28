@@ -191,7 +191,7 @@ is $results->{locks}[0]{name},      'test',       'right name';
 like $results->{locks}[0]{expires}, qr/^[\d.]+$/, 'expires';
 is $results->{locks}[1], undef, 'no more locks';
 is $results->{total}, 3, 'three results';
-$results = $minion->backend->list_locks(0, 10, {name => 'yada'});
+$results = $minion->backend->list_locks(0, 10, {names => ['yada']});
 is $results->{locks}[0]{name},      'yada',       'right name';
 like $results->{locks}[0]{expires}, qr/^[\d.]+$/, 'expires';
 is $results->{locks}[1]{name},      'yada',       'right name';
@@ -202,7 +202,7 @@ $minion->backend->mysql->db->query(
   "update minion_locks set expires = subtime(now(), '00:00:01')
    where name = 'yada'",
 );
-is $minion->backend->list_locks(0, 10, {name => 'yada'})->{total}, 0,
+is $minion->backend->list_locks(0, 10, {names => ['yada']})->{total}, 0,
   'no results';
 $minion->unlock('test');
 is $minion->backend->list_locks(0, 10)->{total}, 0, 'no results';
@@ -312,22 +312,22 @@ is $batch->[3]{task},       'fail',       'right task';
 is $batch->[3]{state},      'finished',   'right state';
 is $batch->[3]{retries},    0,            'job has not been retried';
 ok !$batch->[4], 'no more results';
-$batch = $minion->backend->list_jobs(0, 10, {state => 'inactive'})->{jobs};
+$batch = $minion->backend->list_jobs(0, 10, {states => ['inactive']})->{jobs};
 is $batch->[0]{state},   'inactive', 'right state';
 is $batch->[0]{retries}, 0,          'job has not been retried';
 ok !$batch->[1], 'no more results';
-$batch = $minion->backend->list_jobs(0, 10, {task => 'add'})->{jobs};
+$batch = $minion->backend->list_jobs(0, 10, {tasks => ['add']})->{jobs};
 is $batch->[0]{task},    'add', 'right task';
 is $batch->[0]{retries}, 0,     'job has not been retried';
 ok !$batch->[1], 'no more results';
-$batch = $minion->backend->list_jobs(0, 10, {queue => 'default'})->{jobs};
+$batch = $minion->backend->list_jobs(0, 10, {queues => ['default']})->{jobs};
 is $batch->[0]{queue}, 'default', 'right queue';
 is $batch->[1]{queue}, 'default', 'right queue';
 is $batch->[2]{queue}, 'default', 'right queue';
 is $batch->[3]{queue}, 'default', 'right queue';
 ok !$batch->[4], 'no more results';
 $batch
-  = $minion->backend->list_jobs(0, 10, {queue => 'does_not_exist'})->{jobs};
+  = $minion->backend->list_jobs(0, 10, {queues => ['does_not_exist']})->{jobs};
 is_deeply $batch, [], 'no results';
 $results = $minion->backend->list_jobs(0, 1);
 $batch = $results->{jobs};
@@ -589,7 +589,7 @@ $job = $worker->register->dequeue(0);
 $job->perform;
 is $job->info->{state}, 'finished', 'right state';
 ok $job->note(yada => ['works']), 'added metadata';
-ok !$minion->backend->note(-1, yada => ['failed']), 'not added metadata';
+ok !$minion->backend->note(-1, {yada => ['failed']}), 'not added metadata';
 my $notes = {
   foo => [4, 5, 6],
   bar  => {baz => [1, 2, 3]},
@@ -765,7 +765,9 @@ ok $job2->finish, 'job finished';
 $job = $worker->dequeue(0);
 is $job->id, $id3, 'right id';
 is_deeply $job->info->{children}, [], 'right children';
-is_deeply $job->info->{parents}, [$id, $id2], 'right parents';
+my $parents = $job->info->{parents};
+is scalar(grep m/^($id|$id2)$/, @$parents), 2, 'right parents matches';
+is scalar(@$parents), 2, 'right parents exact amount';
 is $minion->stats->{finished_jobs}, 2, 'two finished jobs';
 is $minion->repair->stats->{finished_jobs}, 2, 'two finished jobs';
 ok $job->finish, 'job finished';
