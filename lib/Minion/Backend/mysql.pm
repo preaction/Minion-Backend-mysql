@@ -31,6 +31,26 @@ sub dequeue {
   return $self->_try($id, $options);
 }
 
+sub history {
+  my $self = shift;
+
+  my $sql = <<SQL;
+SELECT
+  MIN(UNIX_TIMESTAMP(finished)) as `epoch`,
+  DAY(finished) as `day`,
+  HOUR(finished) as `hour`,
+  SUM(CASE state WHEN 'failed' THEN 1 ELSE 0 END) AS failed_jobs,
+  SUM(CASE state WHEN 'finished' THEN 1 ELSE 0 END) AS finished_jobs
+FROM minion_jobs
+WHERE finished > SUBTIME(NOW(), '23:00:00')
+GROUP BY `day`, `hour`
+ORDER BY `day`, `hour`
+SQL
+
+  my $data = $self->mysql->db->query($sql)->hashes;
+  return {daily => $data};
+}
+
 sub enqueue {
   my ($self, $task) = (shift, shift);
   my $args    = shift // [];
