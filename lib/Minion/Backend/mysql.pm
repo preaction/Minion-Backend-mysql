@@ -331,11 +331,26 @@ sub unlock {
 
 sub retry_job {
   my ($self, $id, $retries) = (shift, shift, shift);
+  my $db = $self->mysql->db;
   my $options = shift // {};
 
-  my $seconds = $self->mysql->db->dbh->quote($options->{delay} // 0);
+  my $seconds = $db->dbh->quote($options->{delay} // 0);
 
-  return !!$self->mysql->db->query(
+  if ( my $parents = delete $options->{ parents } ) {
+    $db->query(
+      'DELETE FROM `minion_jobs_depends` WHERE child_id=?',
+      $id,
+    );
+    if ( @$parents ) {
+      $db->query(
+        "INSERT INTO minion_jobs_depends (`parent_id`, `child_id`) VALUES "
+        . join( ", ", map "( ?, ? )", @$parents ),
+        map { $_, $id  } @$parents
+      );
+    }
+  }
+
+  return !!$db->query(
     "UPDATE `minion_jobs`
      SET attempts = COALESCE(?, attempts),
        `delayed` = DATE_ADD(NOW(), INTERVAL $seconds SECOND),
@@ -819,6 +834,12 @@ These options are currently available:
   delay => 10
 
 Delay job for this many seconds (from now).
+
+=item parents
+
+  parents => [$id1, $id2, $id3]
+
+Jobs this job depends on.
 
 =item priority
 
