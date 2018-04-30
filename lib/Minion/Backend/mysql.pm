@@ -8,6 +8,7 @@ use Mojo::IOLoop;
 use Mojo::JSON qw(encode_json decode_json);
 use Mojo::mysql;
 use Sys::Hostname 'hostname';
+use Time::Piece ();
 
 has 'mysql';
 
@@ -48,6 +49,26 @@ ORDER BY `day`, `hour`
 SQL
 
   my $data = $self->mysql->db->query($sql)->hashes;
+
+  # Fill in missing hours to create a full time series
+  my $now = Time::Piece->new();
+  my $current_hour = $now->hour;
+  for my $i ( 0..23 ) {
+    my $i_hour = ( $current_hour - ( 23 - $i ) ) % 24;
+    if ( $data->[ $i ]{ hour } != $i_hour ) {
+      my $epoch = $now->epoch - ( 3600 * ( 24 - $i ) );
+      splice @$data, $i, 0, {
+        epoch => $epoch - ( $epoch % 3600 ),
+        failed_jobs => 0,
+        finished_jobs => 0,
+      };
+    }
+    else {
+      delete $data->[ $i ]{hour};
+      delete $data->[ $i ]{day};
+    }
+  }
+
   return {daily => $data};
 }
 
