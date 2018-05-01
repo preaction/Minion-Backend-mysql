@@ -16,14 +16,28 @@ perl:
 matrix:
     include:
         - perl: "5.26"
-          script:
-            - RELEASE_TESTING=1 AUTHOR_TESTING=1 dzil cover -report coveralls
+          env: COVERAGE=1
+
+before_install:
+    - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
+    - source ~/travis-perl-helpers/init
+    - build-perl
+    - perl -V
+    - build-dist
+    - cd $BUILD_DIR
 
 install:
     - sudo cp /etc/mysql/my.cnf /usr/share/mysql/my-default.cnf
-    - dzil authordeps --missing | cpanm --no-skip-satisfied --notest || { cat ~/.cpanm/build.log ; false ; }
-    - dzil listdeps --author --missing | cpanm --no-skip-satisfied --notest || { cat ~/.cpanm/build.log ; false ; }
-    - cpanm --notest Devel::Cover Devel::Cover::Report::Coveralls Dist::Zilla::App::Command::cover || { cat ~/.cpanm/build.log ; false ; }
+    - cpan-install --deps
+    - cpan-install --coverage
+
+before_script:
+    - coverage-setup
 
 script:
-    - dzil test --author --release
+    - perl Makefile.PL
+    - make
+    - prove -bl -s -j$(test-jobs) $(test-files)
+
+after_success:
+    - coverage-report
