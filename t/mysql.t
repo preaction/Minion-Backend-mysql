@@ -340,6 +340,12 @@ $batch = $minion->backend->list_jobs(0, 10, {tasks => ['add']})->{jobs};
 is $batch->[0]{task},    'add', 'right task';
 is $batch->[0]{retries}, 0,     'job has not been retried';
 ok !$batch->[1], 'no more results';
+$batch = $minion->backend->list_jobs(0, 10, {tasks => ['add', 'fail']})->{jobs};
+is $batch->[0]{task}, 'add',  'right task';
+is $batch->[1]{task}, 'fail', 'right task';
+is $batch->[2]{task}, 'fail', 'right task';
+is $batch->[3]{task}, 'fail', 'right task';
+ok !$batch->[4], 'no more results';
 $batch = $minion->backend->list_jobs(0, 10, {queues => ['default']})->{jobs};
 is $batch->[0]{queue}, 'default', 'right queue';
 is $batch->[1]{queue}, 'default', 'right queue';
@@ -512,6 +518,13 @@ $minion->once(
             $job->task('add')->args->[-1] += 1;
           }
         );
+        $job->on(
+          finish => sub {
+            my $job = shift;
+            return unless defined(my $old = $job->info->{notes}{finish_count});
+            $job->note(finish_count => $old + 1, pid => $$);
+          }
+        );
       }
     );
   }
@@ -542,10 +555,15 @@ is $err,      "test\n", 'right error';
 is $failed,   1,        'failed event has been emitted once';
 is $finished, 1,        'finished event has been emitted once';
 $minion->add_task(switcheroo => sub { });
-$minion->enqueue(switcheroo => [5, 3]);
+$minion->enqueue(
+  switcheroo => [5, 3] => {notes => {finish_count => 0, before => 23}});
 $job = $worker->dequeue(0);
 $job->perform;
 is_deeply $job->info->{result}, {added => 9}, 'right result';
+is $job->info->{notes}{finish_count}, 1, 'finish event has been emitted once';
+ok $job->info->{notes}{pid},    'has a process id';
+isnt $job->info->{notes}{pid},  $$, 'different process id';
+is $job->info->{notes}{before}, 23, 'value still exists';
 $worker->unregister;
 
 # Queues
