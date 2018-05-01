@@ -2,6 +2,18 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Fixed backend to work with Minion v9.03. Thanks @pentabion! [Github
+    #18]
+  - Fixed an intermittently failing test. Thanks @pentabion! [Github
+    #19]
+
+  [Other]
+
+  - Fixed Travis configuration to pass tests on 5.12/5.10 and improve
+    performance
+
 0.13      2018-02-03 11:28:16-06:00 America/Chicago
 
   [Added]
