@@ -55,7 +55,7 @@ SQL
   my $current_hour = $now->hour;
   for my $i ( 0..23 ) {
     my $i_hour = ( $current_hour - ( 23 - $i ) ) % 24;
-    if ( $data->[ $i ]{ hour } != $i_hour ) {
+    if ( exists $data->[$i] and $data->[ $i ]{ hour } != $i_hour ) {
       my $epoch = $now->epoch - ( 3600 * ( 24 - $i ) );
       splice @$data, $i, 0, {
         epoch => $epoch - ( $epoch % 3600 ),
