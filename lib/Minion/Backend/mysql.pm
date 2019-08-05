@@ -142,6 +142,11 @@ sub list_jobs {
   }
 
   my $where = @where ? 'WHERE ' . join( ' AND ', @where ) : '';
+
+  # Note: The GROUP BY below only needs minion_jobs.id, child_jobs.parent_id,
+  # and parent_jobs.child_id - the additional redundant columns are just
+  # there to satisfy the ONLY_FULL_GROUP_BY requirement in MySQL strict mode.
+  #
   my $jobs = $self->mysql->db->query(
     "SELECT
       id, args, attempts,
@@ -158,6 +163,11 @@ sub list_jobs {
     LEFT JOIN minion_jobs_depends parent_jobs ON minion_jobs.id=parent_jobs.child_id
     $where
     GROUP BY minion_jobs.id, child_jobs.parent_id, parent_jobs.child_id
+           , minion_jobs.args, minion_jobs.attempts, minion_jobs.created,
+             minion_jobs.delayed, minion_jobs.finished, minion_jobs.notes,
+             minion_jobs.priority, minion_jobs.queue, minion_jobs.result,
+             minion_jobs.retried, minion_jobs.retries, minion_jobs.started,
+             minion_jobs.state, minion_jobs.task, minion_jobs.worker
     ORDER BY id DESC
     LIMIT ?
     OFFSET ?", @params, $limit, $offset,
@@ -444,6 +454,11 @@ sub _try {
   my $db = $self->mysql->db;
 
   my $tx = $db->begin;
+
+  # Note: The GROUP BY below only needs job.id - the additional redundant
+  # columns are just there to satisfy the ONLY_FULL_GROUP_BY requirement
+  # in MySQL strict mode.
+  #
   my $job = $tx->db->query(qq{
     SELECT job.id, job.args, job.retries, job.task
     FROM minion_jobs job
@@ -455,6 +470,7 @@ sub _try {
       )
       AND job.queue IN ($qq) AND job.task IN ($qt)
     GROUP BY job.id
+           , job.args, job.created, job.priority, job.retries, job.task
     ORDER BY job.priority DESC, job.created
     LIMIT 1 FOR UPDATE},
    @{ $options->{queues} || ['default']}, @{ $tasks }
