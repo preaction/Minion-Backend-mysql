@@ -104,14 +104,15 @@ sub enqueue {
 
 sub note {
   my ($self, $id, $merge) = @_;
-  my $job = $self->mysql->db->query(
+  my $db = $self->mysql->db;
+  my $job = $db->query(
     'SELECT notes FROM minion_jobs WHERE id=?', $id,
   )->hash || return 0;
   my $notes = decode_json( $job->{notes} );
   foreach my $key (keys %$merge){
       $notes->{ $key } = $merge->{$key};
   }
-  return !!$self->mysql->db->query(
+  return !!$db->query(
     'UPDATE minion_jobs SET notes = ? WHERE id = ?',
     encode_json( $notes ), $id,
   )->rows;
@@ -143,11 +144,13 @@ sub list_jobs {
 
   my $where = @where ? 'WHERE ' . join( ' AND ', @where ) : '';
 
+  my $db = $self->mysql->db;
+
   # Note: The GROUP BY below only needs minion_jobs.id, child_jobs.parent_id,
   # and parent_jobs.child_id - the additional redundant columns are just
   # there to satisfy the ONLY_FULL_GROUP_BY requirement in MySQL strict mode.
   #
-  my $jobs = $self->mysql->db->query(
+  my $jobs = $db->query(
     "SELECT
       id, args, attempts,
       UNIX_TIMESTAMP(created) AS created,
@@ -181,7 +184,7 @@ sub list_jobs {
   #; use Data::Dumper;
   #; say Dumper $jobs;
 
-  my $total = $self->mysql->db->query(
+  my $total = $db->query(
     'SELECT COUNT(*) AS count FROM minion_jobs',
   )->hash->{count};
 
@@ -212,22 +215,24 @@ sub list_workers {
     push @params, @{ $options->{ids} };
   }
 
+  my $db = $self->mysql->db;
+
   my $where = @where ? 'WHERE ' . join ' AND ', @where : '';
   my $sql = "SELECT
     id, UNIX_TIMESTAMP(notified) AS notified, host, pid,
     UNIX_TIMESTAMP(started) AS started, status
   FROM minion_workers $where ORDER BY id DESC LIMIT ? OFFSET ?";
-  my $workers = $self->mysql->db->query($sql, @params, $limit, $offset)
+  my $workers = $db->query($sql, @params, $limit, $offset)
     ->hashes;
 
   # Add jobs to each worker
   my $jobs_sql = q{SELECT id FROM minion_jobs WHERE state='active' AND worker=?};
   $workers->map( sub {
       $_->{status} = decode_json( $_->{status} );
-      $_->{jobs} = $self->mysql->db->query($jobs_sql, $_->{id})->arrays->flatten->to_array
+      $_->{jobs} = $db->query($jobs_sql, $_->{id})->arrays->flatten->to_array
   } );
 
-  my $total = $self->mysql->db->query(
+  my $total = $db->query(
     'SELECT COUNT(*) AS count FROM minion_workers',
   )->hash->{count};
 
@@ -257,9 +262,11 @@ sub list_locks {
       ORDER BY id
       DESC LIMIT ? OFFSET ?";
 
-  my $locks = $self->mysql->db->query($sql, @params, $limit || 0, $offset || 0)->hashes;
+  my $db = $self->mysql->db;
 
-  my $total = $self->mysql->db->query(
+  my $locks = $db->query($sql, @params, $limit || 0, $offset || 0)->hashes;
+
+  my $total = $db->query(
     "SELECT COUNT(name) AS total FROM minion_locks $where", @params
   )->hash->{total};
 
@@ -346,9 +353,10 @@ sub repair {
 sub reset {
     my $self = shift;
 
-    $self->mysql->db->query("delete from minion_jobs");
-    $self->mysql->db->query("truncate table minion_locks");
-    $self->mysql->db->query("truncate table minion_workers");
+    my $mysql = $self->mysql;
+    $mysql->db->query("delete from minion_jobs");
+    $mysql->db->query("truncate table minion_locks");
+    $mysql->db->query("truncate table minion_workers");
 }
 
 sub lock {
@@ -519,14 +527,17 @@ sub _update {
 
 sub broadcast {
   my ($self, $command, $args, $ids) = (shift, shift, shift || [], shift || []);
+
+  my $db = $self->mysql->db;
+
   my $message = encode_json( [ $command, @$args ] );
   if ( !@$ids ) {
     @$ids = map { $_->{id} }
-      @{ $self->mysql->db->query( 'SELECT id FROM minion_workers' )->hashes },
+      @{ $db->query( 'SELECT id FROM minion_workers' )->hashes },
   }
   my $rows = 0;
   for my $id ( @$ids ) {
-    $rows += $self->mysql->db->query(
+    $rows += $db->query(
       'INSERT INTO minion_workers_inbox ( worker_id, message ) VALUES ( ?, ? )',
       $id, $message,
     )->rows;
@@ -537,14 +548,15 @@ sub broadcast {
 sub receive {
   my ($self, $worker_id) = @_;
   #; use Data::Dumper;
-  my $rows = $self->mysql->db->query(
+  my $db = $self->mysql->db;
+  my $rows = $db->query(
     'SELECT id, message FROM minion_workers_inbox WHERE worker_id=?', $worker_id,
   )->hashes;
   return [] unless $rows && @$rows;
   #; say Dumper $rows;
   my @ids = map { $_->{id} } @$rows;
   #; say Dumper \@ids;
-  $self->mysql->db->query(
+  $db->query(
     'DELETE FROM minion_workers_inbox WHERE id IN (' . ( join ", ", ( '?' ) x @ids ) . ')',
     @ids,
   );
