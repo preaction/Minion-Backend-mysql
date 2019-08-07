@@ -1,6 +1,7 @@
 requires "Minion" => "9.03";
 requires "Mojo::mysql" => "1.04";
 requires "Mojolicious" => "0";
+requires "Ref::Util" => "0";
 requires "perl" => "5.010";
 
 on 'test' => sub {

@@ -7,6 +7,7 @@ use Mojo::Base 'Minion::Backend';
 use Mojo::IOLoop;
 use Mojo::JSON qw(encode_json decode_json);
 use Mojo::mysql;
+use Ref::Util qw(is_blessed_ref);
 use Sys::Hostname 'hostname';
 use Time::Piece ();
 
@@ -279,7 +280,7 @@ sub list_locks {
 sub new {
   my ( $class, @args ) = @_;
   my $mysql;
-  if ( @args == 1 && ref $args[0] eq 'Mojo::mysql' ) {
+  if ( @args == 1 && is_blessed_ref($args[0]) && $args[0]->isa('Mojo::mysql') ) {
     $mysql = $args[0];
   }
   else {
