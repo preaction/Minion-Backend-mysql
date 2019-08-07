@@ -271,11 +271,17 @@ sub list_locks {
 
 sub new {
   my ( $class, @args ) = @_;
-  if ( ref $args[0] eq 'HASH' ) {
-    @args = %{ $args[0] };
+  my $mysql;
+  if ( @args == 1 && ref $args[0] eq 'Mojo::mysql' ) {
+    $mysql = $args[0];
   }
-  my $self = $class->SUPER::new(mysql => Mojo::mysql->new(@args));
-  my $mysql = $self->mysql->max_connections(1);
+  else {
+    if ( ref $args[0] eq 'HASH' ) {
+      @args = %{ $args[0] };
+    }
+    $mysql = Mojo::mysql->new(@args);
+  }
+  my $self = $class->SUPER::new(mysql => $mysql);
   $mysql->migrations->name('minion')->from_data;
   $mysql->once(connection => sub { shift->migrations->migrate });
   return $self;
