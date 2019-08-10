@@ -41,13 +41,32 @@ before_install:
         sudo service mysql restart;
       fi
 
+matrix:
+    include:
+        - perl: "5.26"
+          env: COVERAGE=1
+
+before_install:
+    - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
+    - source ~/travis-perl-helpers/init
+    - build-perl
+    - perl -V
+    - build-dist
+    - cd $BUILD_DIR
+
 install:
     - sudo cp /etc/mysql/my.cnf /usr/share/mysql/my-default.cnf
     - if [ "$TRAVIS_MARIADB_VERSION" ] ; then sudo aptitude install -y libmariadbclient-dev; fi
-    - dzil authordeps --missing | cpanm --no-skip-satisfied || { cat ~/.cpanm/build.log ; false ; }
-    - dzil listdeps --author --missing | cpanm --no-skip-satisfied || { cat ~/.cpanm/build.log ; false ; }
-    - cpanm Devel::Cover Devel::Cover::Report::Coveralls Dist::Zilla::App::Command::cover || { cat ~/.cpanm/build.log ; false ; }
+    - cpan-install --deps
+    - cpan-install --coverage
+
+before_script:
+    - coverage-setup
 
 script:
-    - dzil test --author --release
-    - RELEASE_TESTING=1 AUTHOR_TESTING=1 dzil cover -report coveralls
+    - perl Makefile.PL
+    - make
+    - prove -bl -s -j$(test-jobs) $(test-files)
+
+after_success:
+    - coverage-report

@@ -7,7 +7,7 @@ Minion::Backend::mysql
 
 # VERSION
 
-version 0.10
+version 0.15
 
 # SYNOPSIS
 
@@ -240,7 +240,7 @@ These fields are currently available:
 ## list\_jobs
 
     my $batch = $backend->list_jobs($offset, $limit);
-    my $batch = $backend->list_jobs($offset, $limit, {state => 'inactive'});
+    my $batch = $backend->list_jobs($offset, $limit, {states => 'inactive'});
 
 Returns the same information as ["job\_info"](#job_info) but in batches.
 
@@ -309,6 +309,12 @@ These options are currently available:
         delay => 10
 
     Delay job for this many seconds (from now).
+
+- parents
+
+        parents => [$id1, $id2, $id3]
+
+    Jobs this job depends on.
 
 - priority
 
@@ -387,6 +393,8 @@ These fields are currently available:
 # CONTRIBUTORS
 
 - Alexander Nalobin <nalobin@reg.ru>
+- Dmitry Krylov <pentabion@gmail.com>
+- Jason A. Crome <jcrome@empoweredbenefits.com>
 - Olaf Alders <olaf@wundersolutions.com>
 - Paul Cochrane <paul@liekut.de>
 - Zoffix Znet <cpan@zoffix.com>

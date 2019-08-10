@@ -1,5 +1,57 @@
 Revision history for Perl extension Minion::Backend::mysql.
 
+{{ $NEXT }}
+
+0.15      2018-11-10 11:46:56-06:00 America/Chicago
+
+  [Fixed]
+
+  - Fixed warning when pulling history for the Minion admin console.
+    Thanks @chromedome! [Github #20]
+  - Fixed tests failing with "DBD::mysql::st execute failed: This
+    function has none of DETERMINISTIC, NO SQL, or READS SQL DATA in its
+    declaration and binary logging is enabled". MySQL 8 adds some sanity
+    checks to functions and we need to override them. This might
+    actually be a problem that we will have to fix later...
+
+0.14      2018-04-30 20:41:08-04:00 America/New_York
+
+  [Fixed]
+
+  - Fixed backend to work with Minion v9.03. Thanks @pentabion! [Github
+    #18]
+  - Fixed an intermittently failing test. Thanks @pentabion! [Github
+    #19]
+
+  [Other]
+
+  - Fixed Travis configuration to pass tests on 5.12/5.10 and improve
+    performance
+
+0.13      2018-02-03 11:28:16-06:00 America/Chicago
+
+  [Added]
+
+  - Added `list_locks` method so that the Minion admin UI works. Thanks
+    @pentabion! [Github #17]
+
+0.12      2018-01-14 01:22:07-06:00 America/Chicago
+
+  [Fixed]
+
+  - Fixed all the missing features from the backend to fully-support
+    Minion 8.
+
+0.11      2017-11-18 13:43:48-06:00 America/Chicago
+
+  [Fixed]
+
+  - Upgraded backend to work with Minion 8 and the Minion admin UI
+
+  - Allow hashref of options to Mojo::mysql. This lets us pass in a full
+    DBI connection string to use options not normally available via the
+    `mysql://` URL string.
+
 0.10      2017-11-05 19:12:38-06:00 America/Chicago
 
   [Fixed]

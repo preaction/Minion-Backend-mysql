@@ -8,10 +8,11 @@ use Mojo::IOLoop;
 use Mojo::JSON qw(encode_json decode_json);
 use Mojo::mysql;
 use Sys::Hostname 'hostname';
+use Time::Piece ();
 
 has 'mysql';
 
-our $VERSION = '0.11';
+our $VERSION = '0.16';
 
 sub dequeue {
   my ($self, $id, $wait, $options) = @_;
@@ -31,6 +32,46 @@ sub dequeue {
   return $self->_try($id, $options);
 }
 
+sub history {
+  my $self = shift;
+
+  my $sql = <<SQL;
+SELECT
+  MIN(UNIX_TIMESTAMP(finished)) as `epoch`,
+  DAY(finished) as `day`,
+  HOUR(finished) as `hour`,
+  SUM(CASE state WHEN 'failed' THEN 1 ELSE 0 END) AS failed_jobs,
+  SUM(CASE state WHEN 'finished' THEN 1 ELSE 0 END) AS finished_jobs
+FROM minion_jobs
+WHERE finished > SUBTIME(NOW(), '23:00:00')
+GROUP BY `day`, `hour`
+ORDER BY `day`, `hour`
+SQL
+
+  my $data = $self->mysql->db->query($sql)->hashes;
+
+  # Fill in missing hours to create a full time series
+  my $now = Time::Piece->new();
+  my $current_hour = $now->hour;
+  for my $i ( 0..23 ) {
+    my $i_hour = ( $current_hour - ( 23 - $i ) ) % 24;
+    if ( exists $data->[$i] and $data->[ $i ]{ hour } != $i_hour ) {
+      my $epoch = $now->epoch - ( 3600 * ( 24 - $i ) );
+      splice @$data, $i, 0, {
+        epoch => $epoch - ( $epoch % 3600 ),
+        failed_jobs => 0,
+        finished_jobs => 0,
+      };
+    }
+    else {
+      delete $data->[ $i ]{hour};
+      delete $data->[ $i ]{day};
+    }
+  }
+
+  return {daily => $data};
+}
+
 sub enqueue {
   my ($self, $task) = (shift, shift);
   my $args    = shift // [];
@@ -40,67 +81,190 @@ sub enqueue {
 
   my $seconds = $db->dbh->quote($options->{delay} // 0);
   $db->query(
-    "insert into minion_jobs (`args`, `attempts`, `delayed`, `priority`, `queue`, `task`)
-     values (?, ?, (DATE_ADD(NOW(), INTERVAL $seconds SECOND)), ?, ?, ?)",
+    "insert into minion_jobs (`args`, `attempts`, `delayed`, `priority`, `queue`, `task`, `notes`)
+     values (?, ?, (DATE_ADD(NOW(), INTERVAL $seconds SECOND)), ?, ?, ?, ?)",
      encode_json($args), $options->{attempts} // 1,
-     $options->{priority} // 0, $options->{queue} // 'default', $task
+     $options->{priority} // 0, $options->{queue} // 'default', $task,
+     encode_json( $options->{notes} // {} ),
   );
   my $job_id = $db->dbh->{mysql_insertid};
+
+  if ( my @parents = @{ $options->{parents} || [] } ) {
+    $db->query(
+      "INSERT IGNORE INTO minion_jobs_depends (`parent_id`, `child_id`) VALUES "
+      . join( ", ", map "( ?, ? )", @parents ),
+      map { $_, $job_id  } @parents
+    );
+  }
 
   $self->mysql->pubsub->notify("minion.job" => $job_id);
 
   return $job_id;
 }
 
+sub note {
+  my ($self, $id, $merge) = @_;
+  my $job = $self->mysql->db->query(
+    'SELECT notes FROM minion_jobs WHERE id=?', $id,
+  )->hash || return 0;
+  my $notes = decode_json( $job->{notes} );
+  foreach my $key (keys %$merge){
+      $notes->{ $key } = $merge->{$key};
+  }
+  return !!$self->mysql->db->query(
+    'UPDATE minion_jobs SET notes = ? WHERE id = ?',
+    encode_json( $notes ), $id,
+  )->rows;
+}
+
 sub fail_job   { shift->_update(1, @_) }
 sub finish_job { shift->_update(0, @_) }
-
-sub job_info {
-  my $hash = shift->mysql->db->query(
-    'select id, `args`, UNIX_TIMESTAMP(`created`) as `created`,
-       UNIX_TIMESTAMP(`delayed`) as `delayed`,
-       UNIX_TIMESTAMP(`finished`) as `finished`, `priority`, `queue`, `result`,
-       UNIX_TIMESTAMP(`retried`) as `retried`, COALESCE(`retries`, 0) as retries,
-       UNIX_TIMESTAMP(`started`) as `started`, `state`, `task`, `worker`, `attempts`
-     from minion_jobs where id = ?', shift
-  )->hash;
-
-  return undef unless $hash;
-
-  $hash->{args} = $hash->{args} ? decode_json($hash->{args}) : undef;
-  $hash->{result} = $hash->{result} ? decode_json($hash->{result}) : undef;
-  return $hash;
-}
 
 sub list_jobs {
   my ($self, $offset, $limit, $options) = @_;
 
-  my $state = $options->{state} ? "state in (?)" : "1";
-  my $task = $options->{task} ? "task in (?)" : "1";
+  my ( @where, @params );
+  if ( my $states = $options->{states} ) {
+    push @where, 'state in (' . join( ',', ('?') x @$states ) . ')';
+    push @params, @$states;
+  }
+  if ( my $queues = $options->{queues} ) {
+    push @where, 'queue in (' . join( ',', ('?') x @$queues ) . ')';
+    push @params, @$queues;
+  }
+  if ( my $tasks = $options->{tasks} ) {
+    push @where, 'task in (' . join( ',', ('?') x @$tasks ) . ')';
+    push @params, @$tasks;
+  }
+  if ( my $ids = $options->{ids} ) {
+    push @where, 'id in (' . join( ',', ('?') x @$ids ) . ')';
+    push @params, @$ids;
+  }
 
-  my @args = ($limit, $offset);
-  unshift(@args, $options->{task}) if $options->{task};
-  unshift(@args, $options->{state}) if $options->{state};
+  my $where = @where ? 'WHERE ' . join( ' AND ', @where ) : '';
+  my $jobs = $self->mysql->db->query(
+    "SELECT
+      id, args, attempts,
+      UNIX_TIMESTAMP(created) AS created,
+      UNIX_TIMESTAMP(`delayed`) AS `delayed`,
+      UNIX_TIMESTAMP(finished) AS finished, priority,
+      queue, result, UNIX_TIMESTAMP(retried) AS retried, retries,
+      UNIX_TIMESTAMP(started) AS started, state, task,
+      GROUP_CONCAT( child_jobs.child_id SEPARATOR ':' ) AS children,
+      GROUP_CONCAT( parent_jobs.parent_id SEPARATOR ':' ) AS parents,
+      worker, notes
+    FROM minion_jobs
+    LEFT JOIN minion_jobs_depends child_jobs ON minion_jobs.id=child_jobs.parent_id
+    LEFT JOIN minion_jobs_depends parent_jobs ON minion_jobs.id=parent_jobs.child_id
+    $where
+    GROUP BY minion_jobs.id, child_jobs.parent_id, parent_jobs.child_id
+    ORDER BY id DESC
+    LIMIT ?
+    OFFSET ?", @params, $limit, $offset,
+  )->hashes;
+  $jobs->map( _decode_json_fields(qw{ args result notes }) )
+    ->each( sub {
+      $_->{children} = [ split /:/, $_->{children} // '' ];
+      $_->{parents} = [ split /:/, $_->{parents} // '' ];
+    } );
 
-  return $self->mysql->db->query(
-    "select id from minion_jobs
-     where ($state) and ($task)
-     order by id desc
-     limit ?
-     offset ?", @args
-  )->arrays->map(sub { $self->job_info($_->[0]) })->to_array;
+  #; use Data::Dumper;
+  #; say Dumper $jobs;
+
+  my $total = $self->mysql->db->query(
+    'SELECT COUNT(*) AS count FROM minion_jobs',
+  )->hash->{count};
+
+  return {
+    jobs => $jobs,
+    total => $total,
+  }
+}
+
+sub _decode_json_fields {
+  my @fields = @_;
+  return sub {
+    my $hash = shift;
+    for my $field ( @fields ) {
+      next unless $hash->{ $field };
+      $hash->{ $field } = decode_json( $hash->{ $field } );
+    }
+    return $hash;
+  };
 }
 
 sub list_workers {
-  my ($self, $offset, $limit) = @_;
+  my ($self, $offset, $limit, $options) = @_;
 
-  my $sql = 'select id from minion_workers order by id desc limit ? offset ?';
-  return $self->mysql->db->query($sql, $limit, $offset)
-    ->arrays->map(sub { $self->worker_info($_->[0]) })->to_array;
+  my ( @where, @params );
+  if ( my $ids = $options->{ids} ) {
+    push @where, 'id in (' . join( ',', ('?') x @{$options->{ids}} ) . ')';
+    push @params, @{ $options->{ids} };
+  }
+
+  my $where = @where ? 'WHERE ' . join ' AND ', @where : '';
+  my $sql = "SELECT
+    id, UNIX_TIMESTAMP(notified) AS notified, host, pid,
+    UNIX_TIMESTAMP(started) AS started, status
+  FROM minion_workers $where ORDER BY id DESC LIMIT ? OFFSET ?";
+  my $workers = $self->mysql->db->query($sql, @params, $limit, $offset)
+    ->hashes;
+
+  # Add jobs to each worker
+  my $jobs_sql = q{SELECT id FROM minion_jobs WHERE state='active' AND worker=?};
+  $workers->map( sub {
+      $_->{status} = decode_json( $_->{status} );
+      $_->{jobs} = $self->mysql->db->query($jobs_sql, $_->{id})->arrays->flatten->to_array
+  } );
+
+  my $total = $self->mysql->db->query(
+    'SELECT COUNT(*) AS count FROM minion_workers',
+  )->hash->{count};
+
+  return {
+    workers => $workers,
+    total => $total,
+  };
+}
+
+sub list_locks {
+  my ($self, $offset, $limit, $options) = @_;
+
+  my ( @where, @params );
+  if ( my $name = $options->{names} // $options->{name} ) {
+    my @names = ref $name eq 'ARRAY' ? @$name : ( $name );
+    push @where, 'name in (' . join( ',', ('?') x @names ) . ')';
+    push @params, @names;
+  }
+
+  push @where, 'expires > now()';
+
+  my $where = @where ? 'WHERE ' . join ' AND ', @where : '';
+  my $sql = "SELECT
+          id, name, UNIX_TIMESTAMP(expires) AS expires
+      FROM minion_locks
+      $where
+      ORDER BY id
+      DESC LIMIT ? OFFSET ?";
+
+  my $locks = $self->mysql->db->query($sql, @params, $limit || 0, $offset || 0)->hashes;
+
+  my $total = $self->mysql->db->query(
+    "SELECT COUNT(name) AS total FROM minion_locks $where", @params
+  )->hash->{total};
+
+  return {
+    locks => $locks,
+    total => $total,
+  };
 }
 
 sub new {
-  my $self = shift->SUPER::new(mysql => Mojo::mysql->new(@_));
+  my ( $class, @args ) = @_;
+  if ( ref $args[0] eq 'HASH' ) {
+    @args = %{ $args[0] };
+  }
+  my $self = $class->SUPER::new(mysql => Mojo::mysql->new(@args));
   my $mysql = $self->mysql->max_connections(1);
   $mysql->migrations->name('minion')->from_data;
   $mysql->once(connection => sub { shift->migrations->migrate });
@@ -108,20 +272,15 @@ sub new {
 }
 
 sub register_worker {
-  my ($self, $id) = @_;
-
-  ### TODO: is this the same business logic?
-  if ($id) {
-      my $sql
-        = 'update minion_workers set notified = now() where id = ?';
-      return $id if $self->mysql->db->query($sql, $id)->{affected_rows};
-  }
+  my ($self, $id, $options) = @_;
 
   my $db = $self->mysql->db;
-  my $sql = 'insert into minion_workers (host, pid) values (?, ?)';
-  $db->query($sql, hostname, $$);
+  my $sql = q{INSERT INTO minion_workers (id, host, pid, status)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE notified=NOW(), host=VALUES(host), pid=VALUES(pid), status=VALUES(status)};
+  $db->query($sql, $id, hostname, $$, encode_json( $options->{status} // {} ) );
 
-  return $db->dbh->{mysql_insertid};
+  return $id // $db->dbh->{mysql_insertid};
 }
 
 sub remove_job {
@@ -140,47 +299,86 @@ sub repair {
   my $minion = $self->minion;
   $db->query(
     "delete from minion_workers
-     where notified < (DATE_ADD(NOW(), INTERVAL ? SECOND))", $minion->missing_after
+     where notified < (DATE_SUB(NOW(), INTERVAL ? SECOND))",
+     $minion->missing_after
   );
 
   # Abandoned jobs
-  $db->query(
-    "update minion_jobs as j
-     set finished = now(), result = ?,
-       state = 'failed'
+  my $fail = $db->query(
+    "select id, retries from minion_jobs as j
      where state = 'active'
-       and not exists(select 1 from minion_workers where id = j.worker)",
-   encode_json('Worker went away')
+       and not exists (select 1 from minion_workers where id = j.worker)"
+  )->hashes;
+  $fail->each(sub { $self->fail_job(@$_{qw(id retries)}, 'Worker went away') });
+
+  # Old jobs with no unresolved dependencies
+  $db->query( q{
+    DELETE FROM minion_jobs
+    WHERE state = 'finished'
+      AND finished <= (DATE_SUB(NOW(), INTERVAL ? SECOND))
+      AND state='finished'
+      AND NOT EXISTS (
+        SELECT 1 FROM ( SELECT id, state FROM minion_jobs ) AS child
+        LEFT JOIN minion_jobs_depends depends ON child.id=depends.child_id
+        WHERE parent_id=minion_jobs.id AND child.state != 'finished'
+      )
+    }, $minion->remove_after,
   );
 
-  # Old jobs
-  $db->query(
-    "delete from minion_jobs
-     where state = 'finished' and finished < (DATE_SUB(NOW(), INTERVAL ? SECOND))",
-    $minion->remove_after
-  );
 }
 
 sub reset {
     my $self = shift;
 
-    $self->mysql->db->query("truncate table minion_jobs");
+    $self->mysql->db->query("delete from minion_jobs");
+    $self->mysql->db->query("truncate table minion_locks");
     $self->mysql->db->query("truncate table minion_workers");
+}
+
+sub lock {
+  my ($self, $name, $duration, $options) = (shift, shift, shift, shift // {});
+  return !!$self->mysql->db->query('SELECT minion_lock(?, ?, ?)',
+    $name, $duration, $options->{limit} || 1)->array->[0];
+}
+
+sub unlock {
+  !!shift->mysql->db->query(
+    'DELETE FROM minion_locks WHERE id IN (
+       SELECT b.id FROM (SELECT id, expires, name FROM minion_locks) b
+       WHERE b.expires > NOW() AND b.name = ? ORDER BY EXPIRES
+     ) LIMIT 1', shift
+  )->rows;
 }
 
 sub retry_job {
   my ($self, $id, $retries) = (shift, shift, shift);
+  my $db = $self->mysql->db;
   my $options = shift // {};
 
-  my $seconds = $self->mysql->db->dbh->quote($options->{delay} // 0);
+  my $seconds = $db->dbh->quote($options->{delay} // 0);
 
-  return !!$self->mysql->db->query(
-    "update `minion_jobs`
-     set `finished` = null, priority = coalesce(?, priority),
-      `queue` = coalesce(?, queue), `result` = null, `retried` = now(),
-       `retries` = retries + 1, `started` = null, `state` = 'inactive',
-       `worker` = null, `delayed` = (DATE_ADD(NOW(), INTERVAL $seconds SECOND))
-     where `id` = ? and retries = ? and `state` in ('failed', 'finished')",
+  if ( my $parents = delete $options->{ parents } ) {
+    $db->query(
+      'DELETE FROM `minion_jobs_depends` WHERE child_id=?',
+      $id,
+    );
+    if ( @$parents ) {
+      $db->query(
+        "INSERT INTO minion_jobs_depends (`parent_id`, `child_id`) VALUES "
+        . join( ", ", map "( ?, ? )", @$parents ),
+        map { $_, $id  } @$parents
+      );
+    }
+  }
+
+  return !!$db->query(
+    "UPDATE `minion_jobs`
+     SET attempts = COALESCE(?, attempts),
+       `delayed` = DATE_ADD(NOW(), INTERVAL $seconds SECOND),
+       priority = COALESCE(?, priority), queue = COALESCE(?, queue),
+       retried = NOW(), retries = retries + 1, state = 'inactive'
+     WHERE id = ? AND retries = ?",
+     $options->{attempts},
      @$options{qw(priority queue)}, $id, $retries
   )->{affected_rows};
 }
@@ -204,6 +402,17 @@ sub stats {
     $states->{$next->[0]} = $next->[1];
   }
 
+  my $uptime = $db->query( 'SHOW GLOBAL STATUS LIKE "Uptime"' )->hash->{Value};
+
+  $sql = q{
+    SELECT
+      SUM(CASE WHEN `state` = "inactive" AND `delayed` > NOW() THEN 1 ELSE 0 END) AS delayed_jobs,
+      COUNT(*) AS enqueued_jobs
+      FROM minion_jobs
+    };
+  %$states = ( %$states, %{ $db->query($sql)->hash } );
+  $states->{active_locks} = $db->query("SELECT COUNT(*) FROM minion_locks WHERE expires > now()")->array->[0];
+
   return {
     active_workers   => $active,
     inactive_workers => $all - $active,
@@ -211,33 +420,15 @@ sub stats {
     inactive_jobs    => $states->{inactive} || 0,
     failed_jobs      => $states->{failed} || 0,
     finished_jobs    => $states->{finished} || 0,
+    enqueued_jobs    => $states->{enqueued_jobs} || 0,
+    delayed_jobs     => $states->{delayed_jobs} || 0,
+    active_locks     => $states->{active_locks} || 0,
+    uptime           => $uptime || 0,
   };
 }
 
 sub unregister_worker {
   shift->mysql->db->query('delete from minion_workers where id = ?', shift);
-}
-
-sub worker_info {
-  my ($self, $id) = @_;
-
-  my $hash = $self->mysql->db->query(
-    "select `id`, UNIX_TIMESTAMP(`notified`) as `notified`, `host`,
-    `pid`, UNIX_TIMESTAMP(`started`) as `started`
-     from `minion_workers`
-     where id = ?", $id
-  )->hash;
-
-  return undef unless $hash;
-
-  my $jobs = $self->mysql->db->query(
-   "select `id` from `minion_jobs`
-   where `state` = 'active' and `worker` = ?", $id
-  )->arrays()->flatten->to_array;
-
-  $hash->{jobs} = $jobs;
-
-  return $hash;
 }
 
 sub _try {
@@ -253,12 +444,24 @@ sub _try {
   my $db = $self->mysql->db;
 
   my $tx = $db->begin;
-  my $job = $tx->db->query(qq(select id, args, retries, task from minion_jobs
-    where state = 'inactive' and `delayed` <= NOW() and queue in ($qq)
-    and task in ($qt)
-    order by priority desc, created limit 1 for update),
+  my $job = $tx->db->query(qq{
+    SELECT job.id, job.args, job.retries, job.task
+    FROM minion_jobs job
+    WHERE job.state = 'inactive' AND job.`delayed` <= NOW()
+      AND NOT EXISTS (
+        SELECT 1 FROM minion_jobs_depends depends
+        LEFT JOIN minion_jobs parent ON parent.id=depends.parent_id
+        WHERE child_id=job.id AND parent.id=depends.parent_id AND parent.state IN ( 'inactive', 'active', 'failed' )
+      )
+      AND job.queue IN ($qq) AND job.task IN ($qt)
+    GROUP BY job.id
+    ORDER BY job.priority DESC, job.created
+    LIMIT 1 FOR UPDATE},
    @{ $options->{queues} || ['default']}, @{ $tasks }
   )->hash;
+
+  #; use Data::Dumper;
+  #; say "Dequeuing job: " . Dumper $job;
 
   return undef unless $job;
 
@@ -270,19 +473,22 @@ sub _try {
 
   $job->{args} = $job->{args} ? decode_json($job->{args}) : undef;
 
-  $job;
+  return $job;
 }
 
 sub _update {
   my ($self, $fail, $id, $retries, $result) = @_;
-  return undef unless $self->mysql->db->query(
+  my $updated = $self->mysql->db->query(
     "update minion_jobs
      set finished = now(), result = ?, state = ?
      where id = ? and retries = ? and state = 'active'",
      encode_json($result), $fail ? 'failed' : 'finished', $id,
     $retries
   )->{affected_rows};
-  my $job = $self->job_info( $id );
+  #; say "Updated $updated job rows (id: $id, fail: $fail, result: @{[encode_json( $result )]})";
+  return undef unless $updated;
+
+  my $job = $self->list_jobs( 0, 1, { ids => [$id] } )->{jobs}[0];
   return 1 if !$fail || (my $attempts = $job->{attempts}) == 1;
   return 1 if $retries >= ( $attempts - 1 );
   my $delay = $self->minion->backoff->( $retries );
@@ -574,7 +780,7 @@ Id of worker that is processing the job.
 =head2 list_jobs
 
   my $batch = $backend->list_jobs($offset, $limit);
-  my $batch = $backend->list_jobs($offset, $limit, {state => 'inactive'});
+  my $batch = $backend->list_jobs($offset, $limit, {states => 'inactive'});
 
 Returns the same information as L</"job_info"> but in batches.
 
@@ -649,6 +855,12 @@ These options are currently available:
   delay => 10
 
 Delay job for this many seconds (from now).
+
+=item parents
+
+  parents => [$id1, $id2, $id3]
+
+Jobs this job depends on.
 
 =item priority
 
@@ -778,4 +990,44 @@ ALTER TABLE minion_jobs ADD COLUMN attempts INT NOT NULL DEFAULT 1;
 -- 5 up
 ALTER TABLE minion_jobs MODIFY COLUMN args MEDIUMBLOB NOT NULL;
 ALTER TABLE minion_jobs MODIFY COLUMN result MEDIUMBLOB;
+
+-- 6 up
+ALTER TABLE minion_workers ADD COLUMN status MEDIUMBLOB;
+ALTER TABLE minion_jobs ADD COLUMN notes MEDIUMBLOB;
+CREATE TABLE IF NOT EXISTS minion_locks (
+  id      SERIAL NOT NULL PRIMARY KEY,
+  name    VARCHAR(255) NOT NULL,
+  expires TIMESTAMP NOT NULL,
+  INDEX (name, expires)
+);
+DELIMITER //
+CREATE FUNCTION minion_lock( $1 VARCHAR(255), $2 INTEGER, $3 INTEGER) RETURNS BOOL
+BEGIN
+  DECLARE new_expires TIMESTAMP DEFAULT DATE_ADD( NOW(), INTERVAL 1*$2 SECOND );
+  DELETE FROM minion_locks WHERE expires < NOW();
+  IF (SELECT COUNT(*) >= $3 FROM minion_locks WHERE name = $1)
+  THEN
+    RETURN FALSE;
+  END IF;
+  IF new_expires > NOW()
+  THEN
+    INSERT INTO minion_locks (name, expires) VALUES ($1, new_expires);
+  END IF;
+  RETURN TRUE;
+END
+//
+DELIMITER ;
+CREATE TABLE minion_jobs_depends (
+  parent_id BIGINT UNSIGNED NOT NULL,
+  child_id BIGINT UNSIGNED NOT NULL,
+  FOREIGN KEY (parent_id) REFERENCES minion_jobs(id) ON DELETE CASCADE,
+  FOREIGN KEY (child_id) REFERENCES minion_jobs(id) ON DELETE CASCADE
+);
+
+-- 6 down
+ALTER TABLE minion_workers DROP COLUMN status;
+ALTER TABLE minion_jobs DROP COLUMN notes;
+DROP TABLE IF EXISTS minion_locks;
+DROP FUNCTION IF EXISTS minion_lock;
+DROP TABLE minion_jobs_depends;
 
