@@ -2,16 +2,44 @@ sudo: required
 
 language: perl
 
-perl:
-    - "5.26"
-    - "5.24"
-    - "5.22"
-    - "5.20"
-    - "5.18"
-    - "5.16"
-    - "5.14"
-    - "5.12"
-    - "5.10"
+matrix:
+    include:
+        # - perl: "5.26"
+
+        # - perl: "5.24"
+          # - perl: "5.24"
+          # addons:
+          # mariadb: 5.5
+          # - perl: "5.24"
+          # addons:
+          # mariadb: 10.0
+          # - perl: "5.24"
+          # addons:
+          # mariadb: 10.1
+        - perl: "5.24"
+          env: MYSQL_VERSION=8.0
+
+          # - perl: "5.22"
+          # - perl: "5.20"
+          # - perl: "5.18"
+          # - perl: "5.16"
+          # - perl: "5.14"
+          # - perl: "5.12"
+          # - perl: "5.10"
+
+before_install:
+    - if [ x"$MYSQL_VERSION" != "x" ];
+      then
+        sudo service mysql stop;
+        sudo apt-key adv --keyserver pgp.mit.edu --recv-keys 5072E1F5;
+        . /etc/lsb-release;
+        sudo add-apt-repository "deb http://repo.mysql.com/apt/ubuntu/ $DISTRIB_CODENAME mysql-$MYSQL_VERSION";
+        sudo apt-get update;
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -q --yes --fix-broken --allow-unauthenticated --option DPkg::Options::=--force-confnew install mysql-server;
+        echo "upgrading mysql";
+        sudo mysql_upgrade -u root --password='' --force;
+        sudo service mysql restart;
+      fi
 
 matrix:
     include:
@@ -28,6 +56,7 @@ before_install:
 
 install:
     - sudo cp /etc/mysql/my.cnf /usr/share/mysql/my-default.cnf
+    - if [ "$TRAVIS_MARIADB_VERSION" ] ; then sudo aptitude install -y libmariadbclient-dev; fi
     - cpan-install --deps
     - cpan-install --coverage
 
