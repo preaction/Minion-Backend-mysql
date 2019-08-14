@@ -1031,7 +1031,7 @@ ALTER TABLE minion_workers ADD COLUMN status MEDIUMBLOB;
 ALTER TABLE minion_jobs ADD COLUMN notes MEDIUMBLOB;
 CREATE TABLE IF NOT EXISTS minion_locks (
   id      SERIAL NOT NULL PRIMARY KEY,
-  name    VARCHAR(200) NOT NULL,
+  name    VARCHAR(255) NOT NULL,
   expires TIMESTAMP NOT NULL,
   INDEX (name, expires)
 );

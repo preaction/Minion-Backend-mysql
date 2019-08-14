@@ -23,17 +23,17 @@ matrix:
       - perl: "5.28"
         env: MYSQL_VERSION=5.6
       - perl: "5.28"
-        env: MYSQL_VERSION=8.0 MYSQL_STRICT=1
+        env: MYSQL_VERSION=8.0 MYSQL_CONFIG=xt/travis/myisam-utf8mb4.cnf
       - perl: "5.28"
-        env: MYSQL_VERSION=5.7 MYSQL_STRICT=1
+        env: MYSQL_VERSION=5.7 MYSQL_CONFIG=xt/travis/myisam-utf8mb4.cnf
       - perl: "5.28"
-        env: MYSQL_VERSION=5.6 MYSQL_STRICT=1
+        env: MYSQL_VERSION=5.6 MYSQL_CONFIG=xt/travis/myisam-utf8mb4.cnf
       - perl: "5.28"
-        env: MYSQL_VERSION=8.0 MYSQL_UTF8MB4=1
+        env: MYSQL_VERSION=8.0 MYSQL_CONFIG=xt/travis/innodb-strict-utf8mb4.cnf
       - perl: "5.28"
-        env: MYSQL_VERSION=5.7 MYSQL_UTF8MB4=1
+        env: MYSQL_VERSION=5.7 MYSQL_CONFIG=xt/travis/innodb-strict-utf8mb4.cnf
       - perl: "5.28"
-        env: MYSQL_VERSION=5.6 MYSQL_UTF8MB4=1
+        env: MYSQL_VERSION=5.6 MYSQL_CONFIG=xt/travis/innodb-strict-utf8mb4.cnf
       - perl: "5.28"
         env: COVERAGE=1
 
@@ -52,8 +52,7 @@ before_install:
         sudo service mysql restart;
       fi
     - if [ "$TRAVIS_MARIADB_VERSION" ] ; then sudo aptitude install -y libmariadbclient-dev; fi
-    - if [ "$MYSQL_STRICT" ] ; then sudo cp xt/travis/mysql-strict.cnf /etc/mysql/conf.d && sudo service mysql restart; fi
-    - if [ "$MYSQL_UTF8MB4" ] ; then sudo cp xt/travis/mysql-utf8mb4.cnf /etc/mysql/conf.d && sudo service mysql restart; fi
+    - if [ "$MYSQL_CONFIG" ] ; then sudo cp $MYSQL_CONFIG /etc/mysql/conf.d && sudo service mysql restart; fi
     - my_print_defaults mysqld client
     - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
     - source ~/travis-perl-helpers/init

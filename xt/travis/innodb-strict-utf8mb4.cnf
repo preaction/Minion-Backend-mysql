@@ -1,0 +1,11 @@
+[mysqld]
+sql-mode=TRADITIONAL,ONLY_FULL_GROUP_BY
+default-storage-engine=InnoDB
+collation-server=utf8mb4_unicode_ci
+character-set-server=utf8mb4
+
+[client]
+default-character-set=utf8mb4
+
+[mysql]
+default-character-set=utf8mb4
