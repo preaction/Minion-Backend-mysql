@@ -279,9 +279,12 @@ sub list_locks {
 
 sub new {
   my ( $class, @args ) = @_;
+
   my $mysql;
+  my $force_migration = 0;
   if ( @args == 1 && blessed($args[0]) && $args[0]->isa('Mojo::mysql') ) {
     $mysql = $args[0];
+    $force_migration = 1;
   }
   else {
     if ( ref $args[0] eq 'HASH' ) {
@@ -289,9 +292,26 @@ sub new {
     }
     $mysql = Mojo::mysql->new(@args);
   }
+
   my $self = $class->SUPER::new(mysql => $mysql);
-  $mysql->migrations->name('minion')->from_data;
-  $mysql->once(connection => sub { shift->migrations->migrate });
+
+  if ($force_migration) {
+
+    # First make sure any impending migrations happen
+    # before we overwrite them:
+    $mysql->migrations->migrate;
+
+    # Then load this module's migrations and run them:
+    $mysql->migrations->name('minion')->from_data;
+    $mysql->migrations->migrate;
+  }
+  else {
+    # Load this module's migrations and run them
+    # the first time a DB connection is attempted:
+    $mysql->migrations->name('minion')->from_data;
+    $mysql->once(connection => sub { shift->migrations->migrate });
+  }
+
   return $self;
 }
 
