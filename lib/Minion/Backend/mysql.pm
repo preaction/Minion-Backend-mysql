@@ -368,10 +368,9 @@ sub lock {
 
 sub unlock {
   !!shift->mysql->db->query(
-    'DELETE FROM minion_locks WHERE id IN (
-       SELECT b.id FROM (SELECT id, expires, name FROM minion_locks) b
-       WHERE b.expires > NOW() AND b.name = ? ORDER BY EXPIRES
-     ) LIMIT 1', shift
+    'DELETE FROM minion_locks
+      WHERE expires > NOW() AND name = ? ORDER BY EXPIRES
+      LIMIT 1', shift
   )->rows;
 }
 
