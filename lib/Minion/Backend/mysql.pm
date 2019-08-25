@@ -480,10 +480,12 @@ sub _try {
 
   my $tasks = [keys %{$self->minion->tasks}];
 
-  return  unless @$tasks;
+  return unless @$tasks;
 
-  my $qq = join(", ", map({ "?" } @{ $options->{queues} // ['default'] }));
-  my $qt = join(", ", map({ "?" } @{ $tasks }));
+  my $queues = $options->{queues} // ['default'];
+
+  my $qq = join ", ", map({ "?" } @$queues);
+  my $qt = join ", ", map({ "?" } @$tasks );
 
   my $db = $self->mysql->db;
 
@@ -507,7 +509,7 @@ sub _try {
            , job.args, job.created, job.priority, job.retries, job.task
     ORDER BY job.priority DESC, job.created
     LIMIT 1 FOR UPDATE},
-   @{ $options->{queues} || ['default']}, @{ $tasks }
+   @$queues, @$tasks
   )->hash;
 
   #; use Data::Dumper;
