@@ -1031,12 +1031,14 @@ ALTER TABLE minion_workers ADD COLUMN status MEDIUMBLOB;
 ALTER TABLE minion_jobs ADD COLUMN notes MEDIUMBLOB;
 CREATE TABLE IF NOT EXISTS minion_locks (
   id      SERIAL NOT NULL PRIMARY KEY,
-  name    VARCHAR(200) NOT NULL,
+  -- InnoDB index prefix limit is 767 bytes, and if you're using
+  -- utf8mb4 that means the maximum length is (767 / 4) characters
+  name    VARCHAR(191) NOT NULL,
   expires TIMESTAMP NOT NULL,
   INDEX (name, expires)
 );
 DELIMITER //
-CREATE FUNCTION minion_lock( $1 VARCHAR(200), $2 INTEGER, $3 INTEGER) RETURNS BOOL
+CREATE FUNCTION minion_lock( $1 VARCHAR(191), $2 INTEGER, $3 INTEGER) RETURNS BOOL
 BEGIN
   DECLARE new_expires TIMESTAMP DEFAULT DATE_ADD( NOW(), INTERVAL 1*$2 SECOND );
   DELETE FROM minion_locks WHERE expires < NOW();
@@ -1065,4 +1067,3 @@ ALTER TABLE minion_jobs DROP COLUMN notes;
 DROP TABLE IF EXISTS minion_locks;
 DROP FUNCTION IF EXISTS minion_lock;
 DROP TABLE minion_jobs_depends;
-
