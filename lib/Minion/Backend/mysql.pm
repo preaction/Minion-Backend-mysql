@@ -518,9 +518,12 @@ sub _update {
   #; say "Updated $updated job rows (id: $id, fail: $fail, result: @{[encode_json( $result )]})";
   return undef unless $updated;
 
+  return 1 if !$fail;    # finished
+
   my $job = $self->list_jobs( 0, 1, { ids => [$id] } )->{jobs}[0];
-  return 1 if !$fail || (my $attempts = $job->{attempts}) == 1;
+  return 1 if (my $attempts = $job->{attempts}) == 1;
   return 1 if $retries >= ( $attempts - 1 );
+
   my $delay = $self->minion->backoff->( $retries );
   return $self->retry_job( $id, $retries, { delay => $delay } );
 }
