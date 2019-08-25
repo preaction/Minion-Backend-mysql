@@ -16,9 +16,9 @@ has 'mysql';
 our $VERSION = '0.17';
 
 sub dequeue {
-  my ($self, $id, $wait, $options) = @_;
+  my ($self, $worker_id, $wait, $options) = @_;
 
-  if ((my $job = $self->_try($id, $options))) { return $job }
+  if ((my $job = $self->_try($worker_id, $options))) { return $job }
   return undef if Mojo::IOLoop->is_running;
 
   my $cb = $self->mysql->pubsub->listen("minion.job" => sub {
@@ -30,7 +30,7 @@ sub dequeue {
 
   $self->mysql->pubsub->unlisten("minion.job" => $cb) and Mojo::IOLoop->remove($timer);
 
-  return $self->_try($id, $options);
+  return $self->_try($worker_id, $options);
 }
 
 sub history {
@@ -457,7 +457,7 @@ sub unregister_worker {
 }
 
 sub _try {
-  my ($self, $id, $options) = @_;
+  my ($self, $worker_id, $options) = @_;
 
   my $tasks = [keys %{$self->minion->tasks}];
 
@@ -498,7 +498,7 @@ sub _try {
 
   $tx->db->query(
      qq(update minion_jobs set started = now(), state = 'active', worker = ? where id = ?),
-     $id, $job->{id}
+     $worker_id, $job->{id}
   );
   $tx->commit;
 
