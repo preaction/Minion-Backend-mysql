@@ -487,41 +487,37 @@ sub _try {
   my $qq = join ", ", map({ "?" } @$queues);
   my $qt = join ", ", map({ "?" } @$tasks );
 
-  my $db = $self->mysql->db;
+  my $dbh = $self->mysql->db->dbh;
 
-  my $tx = $db->begin;
-
-  # Note: The GROUP BY below only needs job.id - the additional redundant
-  # columns are just there to satisfy the ONLY_FULL_GROUP_BY requirement
-  # in MySQL strict mode.
+  # Try to update a job and mark it as being active for this worker.
+  # If we succeed, the job_id of the updated job will be stored in
+  # the "@dequeued_job_id" variable:
   #
-  my $job = $tx->db->query(qq{
-    SELECT job.id, job.args, job.retries, job.task
-    FROM minion_jobs job
+  my $affected_rows = $dbh->do(qq{
+    UPDATE minion_jobs job
+    SET job.started = NOW(), job.state = 'active', job.worker = ?,
+        job.id = \@dequeued_job_id := job.id
     WHERE job.state = 'inactive' AND job.`delayed` <= NOW()
       AND NOT EXISTS (
         SELECT 1 FROM minion_jobs_depends depends
-        LEFT JOIN minion_jobs parent ON parent.id=depends.parent_id
+        LEFT JOIN ( SELECT id, state FROM minion_jobs WHERE state IN ( 'inactive', 'active', 'failed' )) AS parent ON parent.id=depends.parent_id
         WHERE child_id=job.id AND parent.id=depends.parent_id AND parent.state IN ( 'inactive', 'active', 'failed' )
       )
       AND job.queue IN ($qq) AND job.task IN ($qt)
-    GROUP BY job.id
-           , job.args, job.created, job.priority, job.retries, job.task
     ORDER BY job.priority DESC, job.created
-    LIMIT 1 FOR UPDATE},
-   @$queues, @$tasks
-  )->hash;
+    LIMIT 1
+   },
+   {}, $worker_id, @$queues, @$tasks
+  );
+
+  return if $affected_rows == 0;   # DBIC returns 0E0 if no rows
+
+  my $job = $dbh->selectrow_hashref(
+    'SELECT id, args, retries, task FROM minion_jobs where id = @dequeued_job_id'
+  );
 
   #; use Data::Dumper;
   #; say "Dequeuing job: " . Dumper $job;
-
-  return undef unless $job;
-
-  $tx->db->query(
-     qq(update minion_jobs set started = now(), state = 'active', worker = ? where id = ?),
-     $worker_id, $job->{id}
-  );
-  $tx->commit;
 
   $job->{args} = $job->{args} ? decode_json($job->{args}) : undef;
 
