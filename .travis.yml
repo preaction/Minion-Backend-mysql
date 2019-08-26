@@ -2,23 +2,59 @@ sudo: required
 
 language: perl
 
-perl:
-    - "5.26"
-    - "5.24"
-    - "5.22"
-    - "5.20"
-    - "5.18"
-    - "5.16"
-    - "5.14"
-    - "5.12"
-    - "5.10"
-
 matrix:
     include:
-        - perl: "5.26"
-          env: COVERAGE=1
+      - perl: "5.28"
+        addons:
+          mariadb: 5.5
+        env: MARIADB_VERSION=5.5
+      - perl: "5.28"
+        addons:
+          mariadb: 10.0
+        env: MARIADB_VERSION=10.0
+      - perl: "5.28"
+        addons:
+          mariadb: 10.1
+        env: MARIADB_VERSION=10.1
+      - perl: "5.28"
+        env: MYSQL_VERSION=8.0
+      - perl: "5.28"
+        env: MYSQL_VERSION=5.7
+      - perl: "5.28"
+        env: MYSQL_VERSION=5.6
+      - perl: "5.28"
+        env: MYSQL_VERSION=8.0 MYSQL_STRICT=1
+      - perl: "5.28"
+        env: MYSQL_VERSION=5.7 MYSQL_STRICT=1
+      - perl: "5.28"
+        env: MYSQL_VERSION=5.6 MYSQL_STRICT=1
+      - perl: "5.28"
+        env: MYSQL_VERSION=8.0 MYSQL_UTF8MB4=1
+      - perl: "5.28"
+        env: MYSQL_VERSION=5.7 MYSQL_UTF8MB4=1
+      - perl: "5.28"
+        env: MYSQL_VERSION=5.6 MYSQL_UTF8MB4=1
+      - perl: "5.28"
+        env: COVERAGE=1
+
 
 before_install:
+    - if [ x"$MYSQL_VERSION" != "x" ];
+      then
+        sudo service mysql stop;
+        sudo apt-key adv --keyserver pgp.mit.edu --recv-keys 5072E1F5;
+        . /etc/lsb-release;
+        sudo add-apt-repository "deb http://repo.mysql.com/apt/ubuntu/ $DISTRIB_CODENAME mysql-$MYSQL_VERSION";
+        sudo apt-get update;
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -q --yes --fix-broken --allow-unauthenticated --option DPkg::Options::=--force-confnew install mysql-server;
+        echo "upgrading mysql";
+        sudo mysql_upgrade -u root --password='' --force;
+        sudo service mysql restart;
+      fi
+    - if [ "$TRAVIS_MARIADB_VERSION" ] ; then sudo aptitude install -y libmariadbclient-dev; fi
+    - if [ "$MYSQL_STRICT" ] ; then sudo cp xt/travis/mysql-strict.cnf /etc/mysql/conf.d && sudo service mysql restart; fi
+    - if [ "$MYSQL_UTF8MB4" ] ; then sudo cp xt/travis/mysql-utf8mb4.cnf /etc/mysql/conf.d && sudo service mysql restart; fi
+    - my_print_defaults mysqld client
     - git clone git://github.com/travis-perl/helpers ~/travis-perl-helpers
     - source ~/travis-perl-helpers/init
     - build-perl
@@ -27,7 +63,6 @@ before_install:
     - cd $BUILD_DIR
 
 install:
-    - sudo cp /etc/mysql/my.cnf /usr/share/mysql/my-default.cnf
     - cpan-install --deps
     - cpan-install --coverage
 
