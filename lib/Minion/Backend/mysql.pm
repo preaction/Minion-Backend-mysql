@@ -446,11 +446,11 @@ sub stats {
     $states->{$next->[0]} = $next->[1];
   }
 
-  my $uptime = $db->query( 'SHOW GLOBAL STATUS LIKE "Uptime"' )->hash->{Value};
+  my $uptime = $db->query( "SHOW GLOBAL STATUS LIKE 'Uptime'" )->hash->{Value};
 
   $sql = q{
     SELECT
-      SUM(CASE WHEN `state` = "inactive" AND `delayed` > NOW() THEN 1 ELSE 0 END) AS delayed_jobs,
+      SUM(CASE WHEN `state` = 'inactive' AND `delayed` > NOW() THEN 1 ELSE 0 END) AS delayed_jobs,
       COUNT(*) AS enqueued_jobs
       FROM minion_jobs
     };
