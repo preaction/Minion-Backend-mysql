@@ -2,6 +2,15 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Fixed migrations not running when given an existing MySQL
+    connection. Thanks @larryl and Grant Street Group!
+  - Improved performance for locks and dequeueing. Thanks @larryl and
+    Grant Street Group!
+  - Fixed the statistics to work under MySQL strict mode. Thanks @larryl
+    and Grant Street Group!
+
 0.16      2019-08-10 21:27:33-05:00 America/Chicago
 
   [Added]
