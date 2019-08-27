@@ -13,7 +13,7 @@ use Time::Piece ();
 
 has 'mysql';
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 sub dequeue {
   my ($self, $worker_id, $wait, $options) = @_;
