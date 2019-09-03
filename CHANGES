@@ -2,6 +2,11 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Fixed an issue with InnoDB index sizing and MySQL strict mode.
+    Thanks @larryl and Grant Street Group! (Github #24)
+
 0.17      2019-08-27 16:11:57-05:00 America/Chicago
 
   [Fixed]
