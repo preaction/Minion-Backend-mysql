@@ -319,8 +319,8 @@ sub register_worker {
   my ($self, $id, $options) = @_;
 
   my $db = $self->mysql->db;
-  my $sql = q{INSERT INTO minion_workers (id, host, pid, status)
-    VALUES (?, ?, ?, ?)
+  my $sql = q{INSERT INTO minion_workers (id, host, pid, status, started, notified)
+    VALUES (?, ?, ?, ?, NOW(), NOW())
     ON DUPLICATE KEY UPDATE notified=NOW(), host=VALUES(host), pid=VALUES(pid), status=VALUES(status)};
   $db->query($sql, $id, hostname, $$, encode_json( $options->{status} // {} ) );
 
@@ -1002,7 +1002,7 @@ create table if not exists minion_jobs (
 		`id`       serial not null primary key,
 		`args`     mediumblob not null,
 		`created`  timestamp not null default current_timestamp,
-		`delayed`  timestamp not null default current_timestamp,
+		`delayed`  timestamp not null,
 		`finished` timestamp null,
 		`priority` int not null,
 		`result`   mediumblob,
@@ -1019,7 +1019,7 @@ create table if not exists minion_workers (
 		`host`    text not null,
 		`pid`     int not null,
 		`started` timestamp not null default current_timestamp,
-		`notified` timestamp not null default current_timestamp
+		`notified` timestamp not null
 );
 
 -- 1 down
@@ -1034,7 +1034,7 @@ alter table minion_jobs add queue varchar(128) not null default 'default';
 
 -- 4 up
 ALTER TABLE minion_workers MODIFY COLUMN started timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE minion_workers MODIFY COLUMN notified timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE minion_workers MODIFY COLUMN notified timestamp NOT NULL;
 CREATE TABLE IF NOT EXISTS minion_workers_inbox (
   `id` SERIAL NOT NULL PRIMARY KEY,
   `worker_id` BIGINT UNSIGNED NOT NULL,
