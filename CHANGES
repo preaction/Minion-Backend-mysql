@@ -2,6 +2,11 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - This backend is now (mostly) compatible with Minion 10.04.
+    Only searching for jobs by notes is not implemented yet.
+
 0.18      2019-09-03 13:28:42-05:00 America/Chicago
 
   [Fixed]
