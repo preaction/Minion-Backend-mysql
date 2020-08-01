@@ -72,7 +72,7 @@ before_script:
 script:
     - perl Makefile.PL
     - make
-    - prove -bl -s -j$(test-jobs) $(test-files)
+    - prove -vbl -s $(test-files)
 
 after_success:
     - coverage-report
