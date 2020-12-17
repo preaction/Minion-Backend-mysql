@@ -1220,3 +1220,10 @@ DROP INDEX minion_jobs_expires ON minion_jobs;
 ALTER TABLE minion_jobs DROP COLUMN expires;
 ALTER TABLE minion_jobs DROP COLUMN lax;
 
+-- 8 up
+ALTER TABLE minion_jobs_depends
+    ADD PRIMARY KEY (parent_id, child_id);
+
+-- 8 down
+ALTER TABLE minion_jobs_depends
+    DROP PRIMARY KEY;
