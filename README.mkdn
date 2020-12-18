@@ -7,7 +7,7 @@ Minion::Backend::mysql
 
 # VERSION
 
-version 0.21
+version 0.22
 
 # SYNOPSIS
 
@@ -394,6 +394,7 @@ These fields are currently available:
 
 - Alexander Nalobin <nalobin@reg.ru>
 - Dmitry Krylov <pentabion@gmail.com>
+- Hu Yin <huyin8@gmail.com>
 - Jason A. Crome <jcrome@empoweredbenefits.com>
 - Larry Leszczynski <larryl@cpan.org>
 - Olaf Alders <olaf@wundersolutions.com>

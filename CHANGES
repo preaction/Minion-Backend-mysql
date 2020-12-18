@@ -2,6 +2,14 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Added a primary key to the dependencies table
+    (`minion_job_depends`). This helps with MySQL cluster systems (like
+    Percona XtraDB) which need primary keys in order to correctly
+    propagate writes. Thanks @nickyinhu and Grant Street Group for
+    submitting this patch! (Github #31)
+
 0.21      2020-07-31 22:55:46-05:00 America/Chicago
 
   [Fixed]
