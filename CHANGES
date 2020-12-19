@@ -2,6 +2,13 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Fixed backend committing the current transaction whenever it is
+    instanciated. This was causing problems with tests that use
+    transactions for isolation and then rollback to restore. Thanks
+    Grant Street Group for reporting this issue!
+
 0.22      2020-12-17 22:04:50-06:00 America/Chicago
 
   [Fixed]
