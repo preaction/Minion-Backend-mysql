@@ -645,9 +645,13 @@ sub receive {
 sub _migrate_notes {
   my ( $mysql ) = @_;
   my $db = $mysql->db;
-  my $tx = $db->begin;
-  $db->select( minion_notes => ['job_id', 'note_value'], { note_key => '***MIGRATED NOTE***' })
-    ->hashes->each(sub {
+  my $rows_to_migrate = $db->select(
+    minion_notes => ['job_id', 'note_value'],
+    { note_key => '***MIGRATED NOTE***' },
+  )->hashes;
+  if ( $rows_to_migrate->size > 0 ) {
+    my $tx = $db->begin;
+    $rows_to_migrate->each(sub {
       my ( $row ) = @_;
       my $notes = decode_json( $row->{note_value} );
       for my $note_key ( keys %$notes ) {
@@ -662,7 +666,8 @@ sub _migrate_notes {
           note_key => '***MIGRATED NOTE***',
       } );
     } );
-  $tx->commit;
+    $tx->commit;
+  }
 }
 
 1;
