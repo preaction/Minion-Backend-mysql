@@ -2,6 +2,8 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+0.23      2020-12-19 16:56:40-06:00 America/Chicago
+
   [Fixed]
 
   - Fixed backend committing the current transaction whenever it is
