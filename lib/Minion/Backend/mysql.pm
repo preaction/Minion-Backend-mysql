@@ -1241,3 +1241,11 @@ ALTER TABLE minion_jobs_depends
 -- 8 down
 ALTER TABLE minion_jobs_depends
     DROP PRIMARY KEY;
+
+-- 9 up
+DROP INDEX minion_jobs_state_idx ON minion_jobs;
+CREATE INDEX minion_jobs_state_idx ON minion_jobs (state, priority DESC, created);
+
+-- 9 down
+DROP INDEX minion_jobs_state_idx ON minion_jobs;
+CREATE INDEX minion_jobs_state_idx ON minion_jobs (state);
