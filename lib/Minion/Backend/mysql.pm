@@ -549,43 +549,48 @@ sub _try {
   my $qq = join ", ", map({ "?" } @$queues);
   my $qt = join ", ", map({ "?" } @$tasks );
 
-  my $dbh = $self->mysql->db->dbh;
+  my $db = $self->mysql->db;
+  my $tx = $db->begin;
 
-  # Try to update a job and mark it as being active for this worker.
-  # If we succeed, the job_id of the updated job will be stored in
-  # the "@dequeued_job_id" variable:
-  #
-  my $affected_rows = $dbh->do(qq{
-    UPDATE minion_jobs job
-    SET job.started = NOW(), job.state = 'active', job.worker = ?,
-        job.id = \@dequeued_job_id := job.id
-    WHERE job.state = 'inactive' AND job.`delayed` <= NOW()
-      AND NOT EXISTS (
-        SELECT 1 FROM minion_jobs_depends depends
-        LEFT JOIN (
-          SELECT id, state, expires
-          FROM minion_jobs
-        ) AS parent ON parent.id=depends.parent_id
-        WHERE child_id=job.id
-          AND (
-            parent.state = 'active'
-            OR ( parent.state = 'failed' and not job.lax )
-            OR ( parent.state = 'inactive' and (parent.expires is null or parent.expires > now()))
+  my $res = $db->query(
+    qq{
+      SELECT job.id, job.args, job.retries, job.task
+      FROM minion_jobs job
+      WHERE job.state = 'inactive'
+        AND job.`delayed` <= NOW()
+        AND NOT EXISTS (
+          SELECT 1 FROM minion_jobs_depends depends
+          LEFT JOIN (
+            SELECT id, state, expires
+            FROM minion_jobs
+          ) AS parent ON parent.id=depends.parent_id
+          WHERE child_id=job.id
+            AND (
+              parent.state = 'active'
+              OR ( parent.state = 'failed' AND NOT job.lax )
+              OR ( parent.state = 'inactive' AND (parent.expires IS NULL OR parent.expires > NOW()))
+          )
         )
-      )
-      AND job.id = COALESCE(?, job.id) AND job.queue IN ($qq) AND job.task IN ($qt)
-      AND (expires is null or expires > now())
-    ORDER BY job.priority DESC, job.created
-    LIMIT 1
-   },
-   {}, $worker_id, $options->{id}, @$queues, @$tasks
+        AND job.id = COALESCE(?, job.id) AND job.queue IN ($qq) AND job.task IN ($qt)
+        AND (expires IS NULL OR expires > NOW())
+      ORDER BY job.priority DESC, job.created
+      LIMIT 1
+      FOR UPDATE
+    },
+    $options->{id}, @$queues, @$tasks,
   );
 
-  return if $affected_rows == 0;   # DBIC returns 0E0 if no rows
+  my $job = $res->hash;
+  return if !$job || !%$job;
 
-  my $job = $dbh->selectrow_hashref(
-    'SELECT id, args, retries, task FROM minion_jobs where id = @dequeued_job_id'
+  $db->dbh->do(
+    qq{
+      UPDATE minion_jobs SET started = NOW(), state = 'active', worker = ?
+      WHERE id = ?
+    },
+    {}, $worker_id, $job->{id},
   );
+  $tx->commit;
 
   #; use Data::Dumper;
   #; say "Dequeuing job: " . Dumper $job;
