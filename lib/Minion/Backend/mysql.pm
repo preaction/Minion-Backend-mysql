@@ -79,6 +79,10 @@ sub enqueue {
   my $options = shift // {};
 
   my $db = $self->mysql->db;
+  # Use a transaction to commit the entire job at once. Without this,
+  # a job may be started before one of its parents, since the parent
+  # restriction is added after the job itself.
+  my $tx = $db->begin;
 
   $db->query(
     "insert into minion_jobs (`args`, `attempts`, `delayed`, `expires`, `lax`, `priority`, `queue`, `task`)
@@ -89,7 +93,7 @@ sub enqueue {
   );
   my $job_id = $db->dbh->{mysql_insertid};
   if ( my $notes = $options->{notes} ) {
-    $self->note( $job_id, $notes );
+    $self->_note( $job_id, $notes, $db );
   }
 
   if ( my @parents = @{ $options->{parents} || [] } ) {
@@ -100,6 +104,7 @@ sub enqueue {
     );
   }
 
+  $tx->commit;
   $self->mysql->pubsub->notify("minion.job" => $job_id);
 
   return $job_id;
@@ -107,7 +112,11 @@ sub enqueue {
 
 sub note {
   my ($self, $id, $notes) = @_;
-  my $db = $self->mysql->db;
+  return $self->_note( $id, $notes, $self->mysql->db );
+}
+
+sub _note {
+  my ($self, $id, $notes, $db) = @_;
 
   my @replace_keys = grep defined $notes->{ $_ }, keys %$notes;
   my @delete_keys = grep !defined $notes->{ $_ }, keys %$notes;
