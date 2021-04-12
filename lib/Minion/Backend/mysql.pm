@@ -1250,7 +1250,9 @@ ALTER TABLE minion_jobs_depends
 -- 9 up
 DROP INDEX minion_jobs_state_idx ON minion_jobs;
 CREATE INDEX minion_jobs_state_idx ON minion_jobs (state, priority DESC, created);
+ALTER TABLE minion_notes MODIFY note_value MEDIUMBLOB;
 
 -- 9 down
 DROP INDEX minion_jobs_state_idx ON minion_jobs;
 CREATE INDEX minion_jobs_state_idx ON minion_jobs (state);
+ALTER TABLE minion_notes MODIFY note_value TEXT;

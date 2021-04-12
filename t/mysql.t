@@ -1,3 +1,4 @@
+use utf8;
 use Mojo::Base -strict;
 
 BEGIN { $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll' }
@@ -102,10 +103,10 @@ subtest 'Job results' => sub {
   is_deeply \@finished, [], 'not finished';
   is_deeply \@failed,   [], 'not failed';
   $job->finish({just => 'works!'});
-  $job->note(foo => 'bar');
+  $job->note(foo => "\x{1F92C}");
   $promise->wait;
   is_deeply $finished[0]{result}, {just => 'works!'}, 'right result';
-  is_deeply $finished[0]{notes},  {foo  => 'bar'},    'right note';
+  is_deeply $finished[0]{notes},  {foo  => "\x{1F92C}"},'right note';
   ok !$finished[1], 'no more results';
   is_deeply \@failed, [], 'not failed';
 
@@ -124,7 +125,7 @@ subtest 'Job results' => sub {
   (@finished, @failed) = ();
   $minion->result_p($id)->then(sub { @finished = @_ })->catch(sub { @failed = @_ })->wait;
   is_deeply $finished[0]{result}, {just => 'works!'}, 'right result';
-  is_deeply $finished[0]{notes},  {foo  => 'bar'},    'right note';
+  is_deeply $finished[0]{notes},  {foo  => "\x{1F92C}"},'right note';
   ok !$finished[1], 'no more results';
   is_deeply \@failed, [], 'not failed';
 
