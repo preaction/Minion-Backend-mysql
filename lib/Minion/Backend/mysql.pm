@@ -84,15 +84,15 @@ sub enqueue {
   # restriction is added after the job itself.
   my $tx = $db->begin;
 
-  $db->query(
+  my $job_id = $db->query(
     "insert into minion_jobs (`args`, `attempts`, `delayed`, `expires`, `lax`, `priority`, `queue`, `task`)
      values (?, ?, (DATE_ADD(NOW(), INTERVAL ? SECOND)), case when ? is not null then date_add( now(), interval ? second ) end, ?, ?, ?, ?)",
      encode_json($args), $options->{attempts} // 1,
      $options->{delay} // 0, ($options->{expire})x2, $options->{lax} ? 1 : 0,
      $options->{priority} // 0, $options->{queue} // 'default', $task,
-  );
-  my $job_id = $db->dbh->{mysql_insertid};
-  if ( my $notes = $options->{notes} ) {
+  )->last_insert_id;
+
+if ( my $notes = $options->{notes} ) {
     $self->_note( $job_id, $notes, $db );
   }
 
