@@ -365,9 +365,9 @@ sub register_worker {
   my $sql = q{INSERT INTO minion_workers (id, host, pid, status)
     VALUES (?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE notified=NOW(), host=VALUES(host), pid=VALUES(pid), status=VALUES(status)};
-  $db->query($sql, $id, hostname, $$, encode_json( $options->{status} // {} ) );
+  my $res = $db->query($sql, $id, hostname, $$, encode_json( $options->{status} // {} ) );
 
-  return $id // $db->dbh->{mysql_insertid};
+  return $id // $res->last_insert_id;
 }
 
 sub remove_job {
