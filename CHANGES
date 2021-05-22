@@ -2,6 +2,11 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Fixed compatibility with DBD::MariaDB. Thanks @saintserge for the
+    patch! [Github #35]
+
 0.24      2021-04-12 19:04:09-04:00 America/Detroit
 
   [NOTE]

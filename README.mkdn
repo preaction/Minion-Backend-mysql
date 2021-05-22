@@ -7,7 +7,7 @@ Minion::Backend::mysql
 
 # VERSION
 
-version 0.24
+version 0.25
 
 # SYNOPSIS
 
@@ -399,6 +399,7 @@ These fields are currently available:
 - Larry Leszczynski <larryl@cpan.org>
 - Olaf Alders <olaf@wundersolutions.com>
 - Paul Cochrane <paul@liekut.de>
+- Sergey Andreev <40195653+saintserge@users.noreply.github.com>
 - Zoffix Znet <cpan@zoffix.com>
 
 # COPYRIGHT AND LICENSE
