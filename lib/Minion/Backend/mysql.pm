@@ -574,52 +574,62 @@ sub _try {
 
   my $qq = join ", ", map({ "?" } @$queues);
   my $qt = join ", ", map({ "?" } @$tasks );
+  my @bind_vars = ( @$queues, @$tasks );
+
+  my $sql_job_id = '';
+  if ( defined $options->{id} ) {
+    $sql_job_id = 'AND job.id = ?';
+    push @bind_vars, $options->{id};
+  }
+
+  my $sql = qq{
+    SELECT job.id, job.args, job.retries, job.task
+    FROM minion_jobs job
+    LEFT JOIN minion_jobs_depends depends ON depends.child_id = job.id
+    LEFT JOIN minion_jobs parent ON parent.id = depends.parent_id
+    WHERE job.state = 'inactive'
+      AND job.`delayed` <= NOW()
+      AND job.queue IN ($qq) AND job.task IN ($qt)
+      $sql_job_id
+      AND (job.expires IS NULL OR job.expires > NOW())
+    GROUP BY job.id
+    HAVING SUM(
+      parent.state IS NOT NULL AND (
+        parent.state = 'active'
+        OR ( parent.state = 'failed' AND NOT job.lax )
+        OR ( parent.state = 'inactive' AND (parent.expires IS NULL OR parent.expires > NOW()))
+      )
+    ) = 0
+    ORDER BY job.priority DESC, job.created
+    LIMIT 1
+  };
 
   my $db = $self->mysql->db;
-  my $tx = $db->begin;
+  my $i = 5; # Try this many times to get a job
+  my $job;
+  while ( $i-- > 0 ) {
+    # Find a candidate job to run
+    my $res = $db->query( $sql, @bind_vars )->hash;
+    return unless $res; # No jobs ready to work on
 
-  my $res = $db->query(
-    qq{
-      SELECT job.id, job.args, job.retries, job.task
-      FROM minion_jobs job
-      WHERE job.state = 'inactive'
-        AND job.`delayed` <= NOW()
-        AND NOT EXISTS (
-          SELECT 1 FROM minion_jobs_depends depends
-          LEFT JOIN (
-            SELECT id, state, expires
-            FROM minion_jobs
-          ) AS parent ON parent.id=depends.parent_id
-          WHERE child_id=job.id
-            AND (
-              parent.state = 'active'
-              OR ( parent.state = 'failed' AND NOT job.lax )
-              OR ( parent.state = 'inactive' AND (parent.expires IS NULL OR parent.expires > NOW()))
-          )
-        )
-        AND job.id = COALESCE(?, job.id) AND job.queue IN ($qq) AND job.task IN ($qt)
-        AND (expires IS NULL OR expires > NOW())
-      ORDER BY job.priority DESC, job.created
-      LIMIT 1
-      FOR UPDATE
-    },
-    $options->{id}, @$queues, @$tasks,
-  );
+    # Try to claim the job for this worker. There is a race condition
+    # between selecting the job and claiming it, so we need to make sure
+    # we were the one to claim it.
+    my $claimed = $db->query(
+      qq{ UPDATE minion_jobs SET started = NOW(), state = 'active', worker = ? WHERE id = ? AND state = 'inactive' },
+      $worker_id, $res->{id},
+    )->affected_rows;
 
-  my $job = $res->hash;
-  return if !$job || !%$job;
+    # Try again if we lose the race
+    next if !$claimed;
 
-  $db->dbh->do(
-    qq{
-      UPDATE minion_jobs SET started = NOW(), state = 'active', worker = ?
-      WHERE id = ?
-    },
-    {}, $worker_id, $job->{id},
-  );
-  $tx->commit;
+    # Won the race, so do the job
+    $job = $res;
+    last;
+  }
 
   #; use Data::Dumper;
-  #; say "Dequeuing job: " . Dumper $job;
+  #; say "Dequeued job: " . Dumper $job;
 
   $job->{args} = $job->{args} ? decode_json($job->{args}) : undef;
 
