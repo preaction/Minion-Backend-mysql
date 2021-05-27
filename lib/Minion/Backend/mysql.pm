@@ -456,6 +456,8 @@ sub reset {
     $db->query("ALTER TABLE minion_jobs AUTO_INCREMENT = 1");
     $db->query("truncate table minion_locks");
     $db->query("ALTER TABLE minion_locks AUTO_INCREMENT = 1");
+    $db->query("truncate table minion_jobs_depends");
+    $db->query("truncate table minion_notes");
     $db->query("truncate table minion_workers");
     $db->query("ALTER TABLE minion_workers AUTO_INCREMENT = 1");
   }
