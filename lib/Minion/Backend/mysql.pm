@@ -1256,3 +1256,10 @@ ALTER TABLE minion_notes MODIFY note_value MEDIUMBLOB;
 DROP INDEX minion_jobs_state_idx ON minion_jobs;
 CREATE INDEX minion_jobs_state_idx ON minion_jobs (state);
 ALTER TABLE minion_notes MODIFY note_value TEXT;
+
+-- 10 up
+CREATE INDEX minion_notes_note_key ON minion_notes (note_key);
+
+-- 10 down
+DROP INDEX minion_notes_note_key ON minion_notes;
+
