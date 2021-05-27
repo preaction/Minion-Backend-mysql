@@ -117,14 +117,14 @@ sub enqueue {
      @insert_params,
   )->last_insert_id;
 
-  if ( $insert_notes_sql ) {
-    my @insert_notes_params = map { $job_id, $_, $notes{$_} } keys %notes;
-    $db->query( $insert_notes_sql, @insert_notes_params );
-  }
-
   if ( $insert_parents_sql ) {
     my @insert_parents_params = map { $_, $job_id  } @parents;
     $db->query( $insert_parents_sql, @insert_parents_params );
+  }
+
+  if ( $insert_notes_sql ) {
+    my @insert_notes_params = map { $job_id, $_, $notes{$_} } keys %notes;
+    $db->query( $insert_notes_sql, @insert_notes_params );
   }
 
   $tx->commit if defined $tx;
