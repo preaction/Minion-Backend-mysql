@@ -90,10 +90,11 @@ sub enqueue {
     $task,
   );
 
+  my @parents = @{ $options->{parents} // [] };
   my %notes = %{ $options->{notes} // {} };
 
   my ( $insert_parents_sql, $insert_notes_sql );
-  if ( my @parents = @{ $options->{parents} || [] } ) {
+  if ( @parents ) {
     $insert_parents_sql = "INSERT IGNORE INTO minion_jobs_depends (`parent_id`, `child_id`) VALUES "
       . join( ", ", map "( ?, ? )", @parents );
   }
@@ -121,7 +122,7 @@ sub enqueue {
   }
 
   if ( $insert_parents_sql ) {
-    my @insert_parents_params = map { $_, $job_id  } @{ $options->{parents} };
+    my @insert_parents_params = map { $_, $job_id  } @parents;
     $db->query( $insert_parents_sql, @insert_parents_params );
   }
 
