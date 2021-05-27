@@ -140,6 +140,7 @@ sub note {
   my ( $replaced, $deleted );
   my $db = $self->mysql->db;
   if ( @replace_keys ) {
+    local $@; # Don't clobber global
     $replaced = !!eval {
       $db->query(
         'REPLACE INTO minion_notes (`job_id`, `note_key`, `note_value`) VALUES '
