@@ -78,6 +78,31 @@ sub enqueue {
   my $args    = shift // [];
   my $options = shift // {};
 
+  # Pre-compute parameters to reduce time holding DB transaction
+  my @insert_params = (
+    encode_json( $args ),
+    $options->{attempts} // 1,
+    $options->{delay} // 0,
+    ($options->{expire})x2,
+    $options->{lax} ? 1 : 0,
+    $options->{priority} // 0,
+    $options->{queue} // 'default',
+    $task,
+  );
+
+  my %notes = %{ $options->{notes} // {} };
+
+  my ( $insert_parents_sql, $insert_notes_sql );
+  if ( my @parents = @{ $options->{parents} || [] } ) {
+    $insert_parents_sql = "INSERT IGNORE INTO minion_jobs_depends (`parent_id`, `child_id`) VALUES "
+      . join( ", ", map "( ?, ? )", @parents );
+  }
+  if ( keys %notes ) {
+    $insert_notes_sql = 'INSERT INTO minion_notes (`job_id`, `note_key`, `note_value`) VALUES '
+      . join( ', ', map '( ?, ?, ? )', keys %notes );
+    $notes{ $_ } = encode_json( $notes{ $_ } ) for keys %notes;
+  }
+
   my $db = $self->mysql->db;
   # Use a transaction to commit the entire job at once. Without this,
   # a job may be started before one of its parents, since the parent
@@ -87,21 +112,17 @@ sub enqueue {
   my $job_id = $db->query(
     "insert into minion_jobs (`args`, `attempts`, `delayed`, `expires`, `lax`, `priority`, `queue`, `task`)
      values (?, ?, (DATE_ADD(NOW(), INTERVAL ? SECOND)), case when ? is not null then date_add( now(), interval ? second ) end, ?, ?, ?, ?)",
-     encode_json($args), $options->{attempts} // 1,
-     $options->{delay} // 0, ($options->{expire})x2, $options->{lax} ? 1 : 0,
-     $options->{priority} // 0, $options->{queue} // 'default', $task,
+     @insert_params,
   )->last_insert_id;
 
-if ( my $notes = $options->{notes} ) {
-    $self->_note( $job_id, $notes, $db );
+  if ( $insert_notes_sql ) {
+    my @insert_notes_params = map { $job_id, $_, $notes{$_} } keys %notes;
+    $db->query( $insert_notes_sql, @insert_notes_params );
   }
 
-  if ( my @parents = @{ $options->{parents} || [] } ) {
-    $db->query(
-      "INSERT IGNORE INTO minion_jobs_depends (`parent_id`, `child_id`) VALUES "
-      . join( ", ", map "( ?, ? )", @parents ),
-      map { $_, $job_id  } @parents
-    );
+  if ( $insert_parents_sql ) {
+    my @insert_parents_params = map { $_, $job_id  } @{ $options->{parents} };
+    $db->query( $insert_parents_sql, @insert_parents_params );
   }
 
   $tx->commit;
@@ -112,28 +133,29 @@ if ( my $notes = $options->{notes} ) {
 
 sub note {
   my ($self, $id, $notes) = @_;
-  return $self->_note( $id, $notes, $self->mysql->db );
-}
-
-sub _note {
-  my ($self, $id, $notes, $db) = @_;
 
   my @replace_keys = grep defined $notes->{ $_ }, keys %$notes;
   my @delete_keys = grep !defined $notes->{ $_ }, keys %$notes;
 
-  my $replaced = !!eval {
-    $db->query(
-      'REPLACE INTO minion_notes (`job_id`, `note_key`, `note_value`) VALUES '
-      . join( ', ', map '( ?, ?, ? )', @replace_keys ),
-      map { $id, $_, encode_json( $notes->{$_} ) } @replace_keys
+  my ( $replaced, $deleted );
+  my $db = $self->mysql->db;
+  if ( @replace_keys ) {
+    $replaced = !!eval {
+      $db->query(
+        'REPLACE INTO minion_notes (`job_id`, `note_key`, `note_value`) VALUES '
+        . join( ', ', map '( ?, ?, ? )', @replace_keys ),
+        map { $id, $_, encode_json( $notes->{$_} ) } @replace_keys
+      )->rows;
+    };
+  }
+  if ( @delete_keys ) {
+    $deleted = !!$db->delete(
+      minion_notes => {
+        job_id => $id,
+        note_key => { -in => \@delete_keys },
+      }
     )->rows;
-  };
-  my $deleted = !!$db->delete(
-    minion_notes => {
-      job_id => $id,
-      note_key => { -in => \@delete_keys },
-    }
-  )->rows;
+  }
 
   return $replaced || $deleted;
 }
