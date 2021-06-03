@@ -14,7 +14,7 @@ use Time::Piece ();
 has 'mysql';
 has 'no_txn' => sub { 0 };
 
-our $VERSION = '0.27';
+our $VERSION = '0.28';
 
 sub dequeue {
   my ($self, $worker_id, $wait, $options) = @_;
