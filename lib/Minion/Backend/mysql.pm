@@ -416,21 +416,23 @@ sub repair {
   );
 
   # Old jobs with no unresolved dependencies and expired jobs
-  $db->query( q{
-    DELETE FROM minion_jobs
-    WHERE (
-        state = 'finished'
-        AND finished <= DATE_SUB(NOW(), INTERVAL ? SECOND)
-        AND NOT EXISTS (
-          SELECT 1 FROM ( SELECT id, state FROM minion_jobs ) AS child
-          LEFT JOIN minion_jobs_depends depends ON child.id=depends.child_id
-          WHERE parent_id=minion_jobs.id AND child.state != 'finished'
+  $db->query(
+    q{
+      DELETE job
+      FROM minion_jobs job
+      LEFT JOIN minion_jobs_depends depends ON depends.parent_id = job.id
+      LEFT JOIN minion_jobs child ON child.id = depends.child_id AND child.state != 'finished'
+      WHERE
+        (
+          job.expires <= NOW() AND job.state = 'inactive'
         )
-      )
-      OR (
-        expires <= now() and state = 'inactive'
-      )
-    }, $minion->remove_after,
+        OR (
+          job.state = 'finished'
+          AND job.`finished` <= DATE_SUB(NOW(), INTERVAL ? SECOND)
+          AND child.id IS NULL
+        )
+    },
+    $minion->remove_after,
   );
 
   # Jobs with missing worker (can be retried)
