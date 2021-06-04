@@ -2,6 +2,12 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Improved performance of stats function, listing jobs (which also is
+    used to get a single job's information), and repairing jobs with
+    missing workers
+
 0.27      2021-06-03 15:08:43-05:00 America/Chicago
 
   [Fixed]
