@@ -202,35 +202,35 @@ sub list_jobs {
 
   my $db = $self->mysql->db;
 
-  # Note: The GROUP BY below only needs minion_jobs.id, child_jobs.parent_id,
-  # and parent_jobs.child_id - the additional redundant columns are just
-  # there to satisfy the ONLY_FULL_GROUP_BY requirement in MySQL strict mode.
-  #
-  my $jobs = $db->query(
-    "SELECT
+  my $list_sql = qq{
+    SELECT
       id, args, attempts,
+      state, task, worker,
+      lax, priority, queue, result, retries,
+      children, parents,
       UNIX_TIMESTAMP(created) AS created,
       UNIX_TIMESTAMP(`delayed`) AS `delayed`,
-      UNIX_TIMESTAMP(finished) AS finished, lax, priority,
-      queue, result, UNIX_TIMESTAMP(retried) AS retried, retries,
-      UNIX_TIMESTAMP(started) AS started, state, task,
-      GROUP_CONCAT( child_jobs.child_id ORDER BY child_jobs.child_id SEPARATOR ':' ) AS children,
-      GROUP_CONCAT( parent_jobs.parent_id ORDER BY parent_jobs.parent_id SEPARATOR ':' ) AS parents,
-      worker, UNIX_TIMESTAMP(NOW()) AS time, UNIX_TIMESTAMP(expires) AS expires
-    FROM minion_jobs j
-    LEFT JOIN minion_jobs_depends child_jobs ON j.id=child_jobs.parent_id
-    LEFT JOIN minion_jobs_depends parent_jobs ON j.id=parent_jobs.child_id
-    $where
-    GROUP BY j.id, child_jobs.parent_id, parent_jobs.child_id
-           , j.args, j.attempts, j.created,
-             j.delayed, j.finished, j.lax,
-             j.priority, j.queue, j.result,
-             j.retried, j.retries, j.started,
-             j.state, j.task, j.worker, j.expires
+      UNIX_TIMESTAMP(finished) AS finished,
+      UNIX_TIMESTAMP(retried) AS retried,
+      UNIX_TIMESTAMP(started) AS started,
+      UNIX_TIMESTAMP(NOW()) AS time,
+      UNIX_TIMESTAMP(expires) AS expires
+    FROM minion_jobs
+    JOIN (
+      SELECT id,
+        GROUP_CONCAT( child_jobs.child_id ORDER BY child_jobs.child_id SEPARATOR ':' ) AS children,
+        GROUP_CONCAT( parent_jobs.parent_id ORDER BY parent_jobs.parent_id SEPARATOR ':' ) AS parents
+      FROM minion_jobs j
+      LEFT JOIN minion_jobs_depends child_jobs ON j.id=child_jobs.parent_id
+      LEFT JOIN minion_jobs_depends parent_jobs ON j.id=parent_jobs.child_id
+      $where
+      GROUP BY id
+    ) filtered USING ( id )
     ORDER BY id DESC
-    LIMIT ?
-    OFFSET ?", @params, $limit, $offset,
-  )->hashes;
+    LIMIT ? OFFSET ?
+  };
+
+  my $jobs = $db->query( $list_sql, @params, $limit, $offset )->hashes;
   $jobs->map( _decode_json_fields(qw{ args result }) )
     ->each( sub {
       $_->{children} = [ split /:/, $_->{children} // '' ];
