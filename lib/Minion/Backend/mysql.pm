@@ -1319,3 +1319,6 @@ CREATE INDEX minion_notes_note_key ON minion_notes (note_key);
 -- 10 down
 DROP INDEX minion_notes_note_key ON minion_notes;
 
+-- 11 up
+CREATE INDEX minion_jobs_stats_idx ON minion_jobs (state, `delayed`);
+
