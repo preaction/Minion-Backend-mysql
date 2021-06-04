@@ -522,45 +522,51 @@ sub retry_job {
 sub stats {
   my $self = shift;
 
-  my $db  = $self->mysql->db;
-  my $all = $db->query('select count(*) from minion_workers')->array->[0];
-  my $sql
-    = "select count(distinct worker) from minion_jobs where state = 'active'";
-  my $active = $db->query($sql)->array->[0];
+  my %stats = map { $_ => 0 } qw(
+    active_workers inactive_workers active_jobs inactive_jobs failed_jobs finished_jobs
+    enqueued_jobs delayed_jobs active_locks uptime
+  );
 
-  #### TODO: odd $a and $b weren't working, or something
-  $sql = 'select state, count(state) from minion_jobs group by 1';
-  my $results
-    = $db->query($sql); # ->reduce(sub { $a->{$b->[0]} = $b->[1]; $a }, {});
+  my $db = $self->mysql->db;
 
-  my $states = {};
-  while (my $next = $results->array) {
-    $states->{$next->[0]} = $next->[1];
+  # Worker statistics
+  my $worker_sql = q{
+    SELECT
+      SUM(job.id IS NOT NULL) AS is_active
+    FROM minion_workers worker
+    LEFT JOIN minion_jobs job
+        ON worker.id = job.worker
+        AND job.state = 'active'
+    GROUP BY worker.id
+  };
+  my $res = $db->query( $worker_sql );
+  while ( my $row = $res->hash ) {
+    $stats{ $row->{is_active} ? 'active_workers' : 'inactive_workers' }++;
   }
 
-  my $uptime = $db->query( "SHOW GLOBAL STATUS LIKE 'Uptime'" )->hash->{Value};
-
-  $sql = q{
+  # Job statistics
+  my $job_sql = q{
     SELECT
-      SUM(CASE WHEN `state` = 'inactive' AND `delayed` > NOW() THEN 1 ELSE 0 END) AS delayed_jobs,
-      COUNT(*) AS enqueued_jobs
-      FROM minion_jobs
-    };
-  %$states = ( %$states, %{ $db->query($sql)->hash } );
-  $states->{active_locks} = $db->query("SELECT COUNT(*) FROM minion_locks WHERE expires > now()")->array->[0];
-
-  return {
-    active_workers   => $active,
-    inactive_workers => $all - $active,
-    active_jobs      => $states->{active} || 0,
-    inactive_jobs    => $states->{inactive} || 0,
-    failed_jobs      => $states->{failed} || 0,
-    finished_jobs    => $states->{finished} || 0,
-    enqueued_jobs    => $states->{enqueued_jobs} || 0,
-    delayed_jobs     => $states->{delayed_jobs} || 0,
-    active_locks     => $states->{active_locks} || 0,
-    uptime           => $uptime || 0,
+        state,
+        COUNT(state) AS jobs,
+        SUM(`delayed` > NOW()) AS `delayed`
+    FROM minion_jobs
+    GROUP BY state
   };
+  $res = $db->query( $job_sql );
+  while ( my $row = $res->hash ) {
+    my $state = $row->{state};
+    $stats{ "${state}_jobs" } += $row->{jobs};
+    $stats{ enqueued_jobs } += $row->{jobs};
+    if ( $state eq 'inactive' ) {
+      $stats{ delayed_jobs } += $row->{delayed};
+    }
+  }
+
+  $stats{active_locks} = $db->query("SELECT COUNT(*) FROM minion_locks WHERE expires > now()")->array->[0];
+  $stats{uptime} = $db->query( "SHOW GLOBAL STATUS LIKE 'Uptime'" )->hash->{Value};
+
+  return \%stats;
 }
 
 sub unregister_worker {
