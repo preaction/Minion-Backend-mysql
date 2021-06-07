@@ -2,6 +2,11 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Sped up enqueue by only using a transaction when needed. `no_txn`
+    will still always disable enqueue transactions.
+
 0.28      2021-06-04 17:49:59-05:00 America/Chicago
 
   [Fixed]
