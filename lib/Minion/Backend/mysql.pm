@@ -106,10 +106,11 @@ sub enqueue {
   }
 
   my $db = $self->mysql->db;
-  # Use a transaction to commit the entire job at once. Without this,
-  # a job may be started before one of its parents, since the parent
-  # restriction is added after the job itself.
-  my $tx = $self->no_txn ? undef : $db->begin;
+  # If we are adding data in related tables, use a transaction to commit
+  # the entire job at once. Without this, a job may be started before
+  # one of its parents, since the parent restriction is added after the
+  # job itself.
+  my $tx = (!$insert_notes_sql && !$insert_parents_sql) || $self->no_txn ? undef : $db->begin;
 
   my $job_id = $db->query(
     "insert into minion_jobs (`args`, `attempts`, `delayed`, `expires`, `lax`, `priority`, `queue`, `task`)
@@ -780,13 +781,14 @@ L<Mojo::mysql> object used to store all data.
 
 =head2 no_txn
 
-If true, will not make a transaction around the L</enqueue> queries.
-Without a transaction, a job could be dequeued before its parent
-relationships are written to the database. However, since MySQL does not
-support nested transactions (despite supporting something almost exactly
-like them...), you can disable transactions for testing by setting this
-attribute (if you perform your tests in a transaction so they can be
-rolled back when the test is complete).
+If true, will not make a transaction around the L</enqueue> insertions
+when a job has parent jobs. Without a transaction, the job could be
+dequeued before its parent relationships are written to the database.
+However, since MySQL does not support nested transactions (despite
+supporting something almost exactly like them...), you can disable
+transactions for testing by setting this attribute (if you perform your
+tests in a transaction so they can be rolled back when the test is
+complete).
 
 =head1 METHODS
 
