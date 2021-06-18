@@ -603,7 +603,7 @@ sub _try {
       AND job.queue IN ($qq) AND job.task IN ($qt)
       $sql_job_id
       AND (job.expires IS NULL OR job.expires > NOW())
-    GROUP BY job.id
+    GROUP BY job.id, job.args, job.retries, job.task
     HAVING SUM(
       parent.state IS NOT NULL AND (
         parent.state = 'active'

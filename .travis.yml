@@ -28,7 +28,6 @@ matrix:
         env: MYSQL_VERSION=5.7 MYSQL_STRICT=1
       - perl: "5.28"
         env: MYSQL_VERSION=5.6 MYSQL_STRICT=1
-        dist: trusty
       - perl: "5.28"
         env: MYSQL_VERSION=8.0 MYSQL_UTF8MB4=1
       - perl: "5.28"
@@ -47,7 +46,7 @@ before_install:
         . /etc/lsb-release;
         sudo add-apt-repository "deb http://repo.mysql.com/apt/ubuntu/ $DISTRIB_CODENAME mysql-$MYSQL_VERSION";
         sudo apt-get update;
-        sudo DEBIAN_FRONTEND=noninteractive apt-get -q --yes --fix-broken --allow-unauthenticated --option DPkg::Options::=--force-confnew install mysql-server;
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -q -t mysql-$MYSQL_VERSION --yes --fix-broken --allow-unauthenticated --option DPkg::Options::=--force-confnew install mysql-server;
         echo "upgrading mysql";
         sudo mysql_upgrade -u root --password='' --force;
         sudo service mysql restart;
