@@ -42,10 +42,12 @@ before_install:
     - if [ x"$MYSQL_VERSION" != "x" ];
       then
         sudo service mysql stop;
+        sudo echo -e "Package: my_package\nPin: $DISTRIB_CODENAME o=Ubuntu\nPin-Priority: -10" > /etc/apt/preferences.d/mysql;
         sudo apt-key add .mysql.pub;
         . /etc/lsb-release;
         sudo add-apt-repository "deb http://repo.mysql.com/apt/ubuntu/ $DISTRIB_CODENAME mysql-$MYSQL_VERSION";
         sudo apt-get update;
+        sudo apt-cache policy mysql-server;
         sudo DEBIAN_FRONTEND=noninteractive apt-get -q -t mysql-$MYSQL_VERSION --yes --fix-broken --allow-unauthenticated --option DPkg::Options::=--force-confnew install mysql-server;
         echo "upgrading mysql";
         sudo mysql_upgrade -u root --password='' --force;
