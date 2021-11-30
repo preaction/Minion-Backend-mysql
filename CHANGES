@@ -2,6 +2,8 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+0.30      2021-11-30 13:05:48-06:00 America/Chicago
+
   [Added]
 
   - Added some denormalized columns to the dependencies table to improve
