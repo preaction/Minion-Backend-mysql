@@ -1338,7 +1338,9 @@ DROP INDEX minion_notes_note_key ON minion_notes;
 CREATE INDEX minion_jobs_stats_idx ON minion_jobs (state, `delayed`);
 
 -- 12 up
-ALTER TABLE minion_jobs_depends ADD COLUMN state VARCHAR(128) NOT NULL DEFAULT 'inactive';
+ALTER TABLE minion_jobs MODIFY COLUMN state ENUM('inactive','active','finished','failed') NOT NULL DEFAULT 'inactive';
+ALTER TABLE minion_jobs MODIFY COLUMN task VARCHAR(50) NOT NULL;
+ALTER TABLE minion_jobs_depends ADD COLUMN state ENUM('inactive','active','finished','failed') NOT NULL DEFAULT 'inactive';
 ALTER TABLE minion_jobs_depends ADD COLUMN expires DATETIME;
 UPDATE minion_jobs_depends dep JOIN minion_jobs job ON dep.parent_id=job.id SET dep.state=job.state, dep.expires=job.expires;
 CREATE TRIGGER minion_trigger_insert_depends BEFORE INSERT ON minion_jobs_depends FOR EACH ROW
