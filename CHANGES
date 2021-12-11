@@ -2,6 +2,8 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+0.32      2021-12-11 16:31:50-06:00 America/Chicago
+
   [Fixed]
 
   - Fixed a warning/error when dequeue finds no job to dequeue.
