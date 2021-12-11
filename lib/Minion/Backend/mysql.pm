@@ -1170,27 +1170,27 @@ __DATA__
 @@ minion
 -- 1 up
 create table if not exists minion_jobs (
-		`id`       serial not null primary key,
-		`args`     mediumblob not null,
-		`created`  timestamp not null default current_timestamp,
-		`delayed`  timestamp not null default current_timestamp,
-		`finished` timestamp null,
-		`priority` int not null,
-		`result`   mediumblob,
-		`retried`  timestamp null,
-		`retries`  int not null default 0,
-		`started`  timestamp null,
-		`state`    varchar(128) not null default 'inactive',
-		`task`     text not null,
-		`worker`   bigint
+  `id`       serial not null primary key,
+  `args`     mediumblob not null,
+  `created`  timestamp not null default current_timestamp,
+  `delayed`  timestamp not null default current_timestamp,
+  `finished` timestamp null,
+  `priority` int not null,
+  `result`   mediumblob,
+  `retried`  timestamp null,
+  `retries`  int not null default 0,
+  `started`  timestamp null,
+  `state`    varchar(128) not null default 'inactive',
+  `task`     text not null,
+  `worker`   bigint
 );
 
 create table if not exists minion_workers (
-		`id`      serial not null primary key,
-		`host`    text not null,
-		`pid`     int not null,
-		`started` timestamp not null default current_timestamp,
-		`notified` timestamp not null default current_timestamp
+  `id`      serial not null primary key,
+  `host`    text not null,
+  `pid`     int not null,
+  `started` timestamp not null default current_timestamp,
+  `notified` timestamp not null default current_timestamp
 );
 
 -- 1 down
@@ -1312,11 +1312,11 @@ ALTER TABLE minion_jobs DROP COLUMN lax;
 
 -- 8 up
 ALTER TABLE minion_jobs_depends
-    ADD PRIMARY KEY (parent_id, child_id);
+  ADD PRIMARY KEY (parent_id, child_id);
 
 -- 8 down
 ALTER TABLE minion_jobs_depends
-    DROP PRIMARY KEY;
+  DROP PRIMARY KEY;
 
 -- 9 up
 DROP INDEX minion_jobs_state_idx ON minion_jobs;
@@ -1344,7 +1344,7 @@ ALTER TABLE minion_jobs_depends ADD COLUMN state ENUM('inactive','active','finis
 ALTER TABLE minion_jobs_depends ADD COLUMN expires DATETIME;
 UPDATE minion_jobs_depends dep JOIN minion_jobs job ON dep.parent_id=job.id SET dep.state=job.state, dep.expires=job.expires;
 CREATE TRIGGER minion_trigger_insert_depends BEFORE INSERT ON minion_jobs_depends FOR EACH ROW
-    SET NEW.state = COALESCE(( SELECT state FROM minion_jobs WHERE id=NEW.parent_id ), 'finished'),
-        NEW.expires = ( SELECT expires FROM minion_jobs WHERE id=NEW.parent_id );
+  SET NEW.state = COALESCE(( SELECT state FROM minion_jobs WHERE id=NEW.parent_id ), 'finished'),
+    NEW.expires = ( SELECT expires FROM minion_jobs WHERE id=NEW.parent_id );
 CREATE TRIGGER minion_trigger_update_jobs AFTER UPDATE ON minion_jobs FOR EACH ROW
-    UPDATE minion_jobs_depends SET state=NEW.state, expires=NEW.expires WHERE parent_id=OLD.id;
+  UPDATE minion_jobs_depends SET state=NEW.state, expires=NEW.expires WHERE parent_id=OLD.id;
