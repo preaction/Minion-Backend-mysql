@@ -17,6 +17,28 @@ has 'no_txn' => sub { 0 };
 
 our $VERSION = '0.32';
 
+# The dequeue system has a couple limitations:
+# 1. There is no way to directly notify a sleeping worker of an incoming
+#    job
+# 2. There is a race condition between identifying a runnable job
+#    and claiming it for the current worker.
+#
+# The first is solved by Mojo::mysql::PubSub, which currently makes
+# a new connection to MySQL, records the connection ID, and then sleeps. 
+# When a message is "published", the publisher writes the message to
+# a table and then `KILL`s all the sleeping "subscribers". One of the
+# subscribers reads the message from the table and continues.
+#
+# The second is solved by checking how many rows are `UPDATE`d when
+# claiming the job. If none, we try again to dequeue immediately. This
+# happens $DEQUEUE_RACE_ATTEMPTS times before giving up.
+#
+# When it gives up, there may still be jobs available to be dequeued. In
+# most cases, this is okay: The worker will start sleeping for an
+# incoming job and when one comes in, it will wake up and start
+# dequeuing again (even if the new job itself isn't ready to run).
+my $DEQUEUE_RACE_ATTEMPTS = 10;
+
 sub dequeue {
   my ($self, $worker_id, $wait, $options) = @_;
 
@@ -629,7 +651,7 @@ sub _try {
 
   warn "Dequeuing SQL: $sql" if DEBUG;
   my $db = $self->mysql->db;
-  my $i = 5; # Try this many times to get a job
+  my $i = $DEQUEUE_RACE_ATTEMPTS;
   my $job;
   while ( $i-- > 0 ) {
     # Find a candidate job to run
@@ -652,11 +674,8 @@ sub _try {
     last;
   }
 
-  #; use Data::Dumper;
-  #; say "Dequeued job: " . Dumper $job;
-
+  return undef unless $job;
   $job->{args} = $job->{args} ? decode_json($job->{args}) : undef;
-
   return $job;
 }
 
