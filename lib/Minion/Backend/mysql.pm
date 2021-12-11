@@ -1367,3 +1367,15 @@ CREATE TRIGGER minion_trigger_insert_depends BEFORE INSERT ON minion_jobs_depend
     NEW.expires = ( SELECT expires FROM minion_jobs WHERE id=NEW.parent_id );
 CREATE TRIGGER minion_trigger_update_jobs AFTER UPDATE ON minion_jobs FOR EACH ROW
   UPDATE minion_jobs_depends SET state=NEW.state, expires=NEW.expires WHERE parent_id=OLD.id;
+
+-- 13 up
+CREATE INDEX minion_jobs_depends_state_expires ON minion_jobs_depends (state, expires);
+
+# Found useless indexes with: SELECT * FROM sys.schema_unused_indexes
+DROP INDEX `minion_jobs_expires` ON `minion_jobs`;
+DROP INDEX `minion_notes_note_key` ON `minion_notes`;
+
+-- 13 down
+DROP INDEX minion_jobs_depends_state_expires ON minion_jobs_depends;
+CREATE INDEX minion_notes_note_key ON minion_notes (note_key);
+CREATE INDEX minion_jobs_expires ON minion_jobs (expires);
