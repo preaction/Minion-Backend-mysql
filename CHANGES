@@ -2,6 +2,8 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+0.33      2021-12-15 15:38:46-06:00 America/Chicago
+
   [Fixed]
 
   - Fixed job dependencies not being removed when a parent job was

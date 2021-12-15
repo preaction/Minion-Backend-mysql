@@ -15,7 +15,7 @@ use Time::Piece ();
 has 'mysql';
 has 'no_txn' => sub { 0 };
 
-our $VERSION = '0.33';
+our $VERSION = '0.34';
 
 # The dequeue system has a couple limitations:
 # 1. There is no way to directly notify a sleeping worker of an incoming
