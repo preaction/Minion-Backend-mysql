@@ -366,11 +366,15 @@ sub list_locks {
 
 sub new {
   my ( $class, @args ) = @_;
+  state $skip_migration = 0;
 
   my $mysql;
   my $force_migration = 0;
   if ( @args == 1 && blessed($args[0]) && $args[0]->isa('Mojo::mysql') ) {
     $mysql = $args[0];
+    # We need to force an immediate migration if given a Mojo::mysql
+    # object, because the user may decide to add another migration after
+    # adding the Minion plugin.
     $force_migration = 1;
   }
   else {
@@ -382,26 +386,30 @@ sub new {
 
   my $self = $class->SUPER::new(mysql => $mysql);
 
-  if ($force_migration) {
+  if ( !$skip_migration ) {
+    if ($force_migration) {
 
-    # First make sure any impending migrations happen
-    # before we overwrite them:
-    $mysql->migrations->migrate;
+      # First make sure any impending migrations happen
+      # before we overwrite them:
+      $mysql->migrations->migrate;
 
-    # Then load this module's migrations and run them:
-    $mysql->migrations->name('minion')->from_data;
-    $mysql->migrations->migrate;
-    _migrate_notes( $mysql );
-  }
-  else {
-    # Load this module's migrations and run them
-    # the first time a DB connection is attempted:
-    $mysql->migrations->name('minion')->from_data;
-    $mysql->once(connection => sub {
-        my ( $mysql ) = @_;
-        $mysql->migrations->migrate;
-        _migrate_notes( $mysql );
-    });
+      # Then load this module's migrations and run them:
+      $mysql->migrations->name('minion')->from_data;
+      my $migrate_notes = $mysql->migrations->active < 7;
+      $mysql->migrations->migrate;
+      _migrate_notes( $mysql ) if $migrate_notes;
+    }
+    else {
+      # Load this module's migrations and run them
+      # the first time a DB connection is attempted:
+      $mysql->migrations->name('minion')->from_data;
+      $mysql->once(connection => sub {
+          my ( $mysql ) = @_;
+          my $migrate_notes = $mysql->migrations->active < 7;
+          $mysql->migrations->migrate;
+          _migrate_notes( $mysql ) if $migrate_notes;
+      });
+    }
   }
 
   return $self;
@@ -1381,3 +1389,4 @@ DROP INDEX `minion_notes_note_key` ON `minion_notes`;
 DROP INDEX minion_jobs_depends_state_expires ON minion_jobs_depends;
 CREATE INDEX minion_notes_note_key ON minion_notes (note_key);
 CREATE INDEX minion_jobs_expires ON minion_jobs (expires);
+

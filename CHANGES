@@ -2,6 +2,12 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Fixed running expensive notes migration query every single time the
+    Minion object is created. This should prevent the need for the index
+    exclusively on the key column, which was only used by this query.
+
 0.33      2021-12-15 15:38:46-06:00 America/Chicago
 
   [Fixed]
