@@ -2,6 +2,8 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+0.34      2021-12-21 11:49:10-06:00 America/Chicago
+
   *** NOTE ***
 
   This is the last release before v1.00. You will need to upgrade to at
