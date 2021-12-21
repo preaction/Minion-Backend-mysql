@@ -62,13 +62,13 @@ sub history {
 
   my $sql = <<SQL;
 SELECT
-  MIN(UNIX_TIMESTAMP(finished)) as `epoch`,
-  DAY(finished) as `day`,
-  HOUR(finished) as `hour`,
-  SUM(CASE state WHEN 'failed' THEN 1 ELSE 0 END) AS failed_jobs,
-  SUM(CASE state WHEN 'finished' THEN 1 ELSE 0 END) AS finished_jobs
-FROM minion_jobs
-WHERE finished > SUBTIME(NOW(), '23:00:00')
+  MIN(UNIX_TIMESTAMP(jobs.finished)) as `epoch`,
+  DAY(jobs.finished) as `day`,
+  HOUR(jobs.finished) as `hour`,
+  SUM(CASE jobs.state WHEN 'failed' THEN 1 ELSE 0 END) AS failed_jobs,
+  SUM(CASE jobs.state WHEN 'finished' THEN 1 ELSE 0 END) AS finished_jobs
+FROM minion_jobs jobs
+WHERE jobs.finished > SUBTIME(NOW(), '23:00:00')
 GROUP BY `day`, `hour`
 ORDER BY `day`, `hour`
 SQL
@@ -199,24 +199,24 @@ sub list_jobs {
     push @params, @$states;
   }
   if ( my $queues = $options->{queues} ) {
-    push @where, 'queue in (' . join( ',', ('?') x @$queues ) . ')';
+    push @where, 'j.queue in (' . join( ',', ('?') x @$queues ) . ')';
     push @params, @$queues;
   }
   if ( my $tasks = $options->{tasks} ) {
-    push @where, 'task in (' . join( ',', ('?') x @$tasks ) . ')';
+    push @where, 'j.task in (' . join( ',', ('?') x @$tasks ) . ')';
     push @params, @$tasks;
   }
   if ( my $ids = $options->{ids} ) {
-    push @where, 'id in (' . join( ',', ('?') x @$ids ) . ')';
+    push @where, 'j.id in (' . join( ',', ('?') x @$ids ) . ')';
     push @params, @$ids;
   }
   if ( my $id = $options->{before} ) {
-    push @where, 'id < ?';
+    push @where, 'j.id < ?';
     push @params, $id;
   }
   if ( my $notes = $options->{notes} ) {
     push @where, '( '
-      . join( ' or ', ('? in ( select note_key from minion_notes where job_id=j.id )')x@$notes )
+      . join( ' or ', ('? in ( select minion_notes.note_key from minion_notes where minion_notes.job_id=j.id )')x@$notes )
       . ' )';
     push @params, @$notes;
   }
@@ -228,29 +228,30 @@ sub list_jobs {
 
   my $list_sql = qq{
     SELECT
-      id, args, attempts,
-      minion_jobs.state, task, worker,
-      lax, priority, queue, result, retries,
-      children, parents,
-      UNIX_TIMESTAMP(created) AS created,
-      UNIX_TIMESTAMP(`delayed`) AS `delayed`,
-      UNIX_TIMESTAMP(finished) AS finished,
-      UNIX_TIMESTAMP(retried) AS retried,
-      UNIX_TIMESTAMP(started) AS started,
+      minion_jobs.id, minion_jobs.args, minion_jobs.attempts,
+      minion_jobs.state, minion_jobs.task, minion_jobs.worker,
+      minion_jobs.lax, minion_jobs.priority, minion_jobs.queue,
+      minion_jobs.result, minion_jobs.retries,
+      filtered.children, filtered.parents,
+      UNIX_TIMESTAMP(minion_jobs.created) AS created,
+      UNIX_TIMESTAMP(minion_jobs.`delayed`) AS `delayed`,
+      UNIX_TIMESTAMP(minion_jobs.finished) AS finished,
+      UNIX_TIMESTAMP(minion_jobs.retried) AS retried,
+      UNIX_TIMESTAMP(minion_jobs.started) AS started,
       UNIX_TIMESTAMP(NOW()) AS time,
       UNIX_TIMESTAMP(minion_jobs.expires) AS expires
     FROM minion_jobs
     JOIN (
-      SELECT id,
+      SELECT j.id,
         GROUP_CONCAT( child_jobs.child_id ORDER BY child_jobs.child_id SEPARATOR ':' ) AS children,
         GROUP_CONCAT( parent_jobs.parent_id ORDER BY parent_jobs.parent_id SEPARATOR ':' ) AS parents
       FROM minion_jobs j
       LEFT JOIN minion_jobs_depends child_jobs ON j.id=child_jobs.parent_id
       LEFT JOIN minion_jobs_depends parent_jobs ON j.id=parent_jobs.child_id
       $where
-      GROUP BY id
+      GROUP BY j.id
     ) filtered USING ( id )
-    ORDER BY id DESC
+    ORDER BY minion_jobs.id DESC
     LIMIT ? OFFSET ?
   };
 
@@ -473,7 +474,7 @@ sub repair {
   $db->query(
     "select job.id, job.retries from minion_jobs job
      left join minion_workers worker on job.worker = worker.id
-     where state = 'active' and queue != 'minion_foreground'
+     where job.state = 'active' and job.queue != 'minion_foreground'
        and worker.id is null"
   )->hashes->each(sub { $self->fail_job(@$_{qw(id retries)}, 'Worker went away') });
 
@@ -581,11 +582,11 @@ sub stats {
   # Job statistics
   my $job_sql = q{
     SELECT
-        state,
-        COUNT(state) AS jobs,
-        SUM(`delayed` > NOW()) AS `delayed`
+        minion_jobs.state,
+        COUNT(minion_jobs.state) AS jobs,
+        SUM(minion_jobs.`delayed` > NOW()) AS `delayed`
     FROM minion_jobs
-    GROUP BY state
+    GROUP BY minion_jobs.state
   };
   $res = $db->query( $job_sql );
   while ( my $row = $res->hash ) {
@@ -636,7 +637,7 @@ sub _try {
     SELECT job.id, job.args, job.retries, job.task
     FROM minion_jobs job
     LEFT JOIN (
-        SELECT child_id, COUNT(child_id) AS pending,
+        SELECT depends.child_id, COUNT(depends.child_id) AS pending,
             COALESCE( SUM(depends.state = 'failed' OR (depends.expires IS NOT NULL AND depends.expires > NOW())), 0 ) AS failed
         FROM minion_jobs_depends depends
         WHERE depends.state IS NOT NULL AND (
@@ -644,7 +645,7 @@ sub _try {
             OR ( depends.state = 'failed' )
             OR ( depends.state = 'inactive' AND (depends.expires IS NULL OR depends.expires > NOW()))
         )
-        GROUP BY child_id
+        GROUP BY depends.child_id
     ) depends ON depends.child_id = job.id
     WHERE job.state = 'inactive'
       AND job.`delayed` <= NOW()
