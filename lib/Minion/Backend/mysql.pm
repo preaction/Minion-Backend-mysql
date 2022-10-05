@@ -1157,6 +1157,23 @@ Time worker was started.
 
 =back
 
+=head1 ERRORS
+
+=head2 DBD::mysql::st execute failed: Table '*.minion_workers' doesn't exist
+
+This may happen when the SQL create/upgrade scripts fail to run
+completely due to permission errors. Re-running with the environment
+variable C<MOJO_MIGRATIONS_DEBUG=1> should produce the error message
+returned by the database.
+
+A common reason for the database install to fail on MySQL >= 8 is that
+the user installing the database does not have C<SUPER> privileges
+needed to create functions when binlogs are enabled: (C<DBD::mysql::st
+execute failed: You do not have the SUPER privilege and binary logging
+is enabled>). See L<the MySQL documentation for Stored Program Binary
+Logging|https://dev.mysql.com/doc/refman/8.0/en/stored-programs-logging.html>
+for more information about this problem and how to correct it.
+
 =head1 SEE ALSO
 
 L<Minion>, L<Mojolicious::Guides>, L<http://mojolicio.us>.

@@ -6,6 +6,12 @@ You must upgrade to v0.30 before upgrading to v1.00 and beyond!
 
 {{ $NEXT }}
 
+  [Docs]
+
+  - Added ERRORS section for common problems.
+  - Documented problem with database table not being created. Thanks
+    @toddbruner for reporting this issue! (Github #39)
+
 1.000     2021-12-21 12:22:50-06:00 America/Chicago
 
   Removed old migrations to improve performance
