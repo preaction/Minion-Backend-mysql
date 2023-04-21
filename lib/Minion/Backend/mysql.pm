@@ -504,6 +504,7 @@ sub reset {
 
 sub lock {
   my ($self, $name, $duration, $options) = (shift, shift, shift, shift // {});
+  $self->mysql->db->query('DELETE FROM minion_locks WHERE expires < NOW();');
   return !!$self->mysql->db->query('SELECT minion_lock(?, ?, ?)',
     $name, $duration, $options->{limit} || 1)->array->[0];
 }
@@ -1255,7 +1256,6 @@ CREATE FUNCTION minion_lock( $1 VARCHAR(191), $2 INTEGER, $3 INTEGER) RETURNS BO
   NOT DETERMINISTIC MODIFIES SQL DATA SQL SECURITY INVOKER
 BEGIN
   DECLARE new_expires TIMESTAMP DEFAULT DATE_ADD( NOW(), INTERVAL 1*$2 SECOND );
-  DELETE FROM minion_locks WHERE expires < NOW();
   IF (SELECT COUNT(*) >= $3 FROM minion_locks WHERE name = $1)
   THEN
     RETURN FALSE;
