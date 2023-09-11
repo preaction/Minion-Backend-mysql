@@ -446,24 +446,26 @@ sub repair {
      $minion->missing_after
   );
 
-  # Old jobs with no unresolved dependencies and expired jobs
+  # Old jobs with no unresolved dependencies
   $db->query(
     q{
       DELETE job
       FROM minion_jobs job
       LEFT JOIN minion_jobs_depends depends ON depends.parent_id = job.id
       LEFT JOIN minion_jobs child ON child.id = depends.child_id AND child.state != 'finished'
-      WHERE
-        (
-          job.expires <= NOW() AND job.state = 'inactive'
-        )
-        OR (
-          job.state = 'finished'
-          AND job.`finished` <= DATE_SUB(NOW(), INTERVAL ? SECOND)
-          AND child.id IS NULL
-        )
+      WHERE job.state = 'finished'
+        AND job.`finished` <= DATE_SUB(NOW(), INTERVAL ? SECOND)
+        AND child.id IS NULL
     },
     $minion->remove_after,
+  );
+
+  # Old expired jobs
+  $db->query(
+    q{
+      DELETE FROM minion_jobs
+      WHERE state = 'inactive' AND expires <= NOW()
+    },
   );
 
   # Jobs with missing worker (can be retried)
