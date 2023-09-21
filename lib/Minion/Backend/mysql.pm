@@ -1285,3 +1285,9 @@ DROP TABLE IF EXISTS minion_notes;
 DROP TABLE IF EXISTS minion_jobs_depends;
 DROP TABLE IF EXISTS minion_jobs;
 DROP FUNCTION minion_lock;
+
+-- 14 up
+ALTER TABLE minion_jobs ADD CONSTRAINT minion_jobs_pk_id PRIMARY KEY (id), ALGORITHM=INPLACE, LOCK=NONE;
+
+-- 14 down
+ALTER TABLE minion_jobs DROP PRIMARY KEY;
