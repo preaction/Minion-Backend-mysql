@@ -636,7 +636,7 @@ sub _try {
     FROM minion_jobs job
     LEFT JOIN (
         SELECT depends.child_id, COUNT(depends.child_id) AS pending,
-            COALESCE( SUM(depends.state = 'failed' OR (depends.expires IS NOT NULL AND depends.expires > NOW())), 0 ) AS failed
+            COALESCE( SUM(depends.state = 'failed' OR (depends.expires IS NOT NULL AND depends.expires <= NOW())), 0 ) AS failed
         FROM minion_jobs_depends depends
         WHERE depends.state IS NOT NULL AND (
             depends.state = 'active'
@@ -1291,3 +1291,10 @@ ALTER TABLE minion_jobs ADD CONSTRAINT minion_jobs_pk_id PRIMARY KEY (id), ALGOR
 
 -- 14 down
 ALTER TABLE minion_jobs DROP PRIMARY KEY;
+
+-- 15 up
+DROP INDEX id ON minion_jobs;
+
+-- 15 down
+CREATE UNIQUE INDEX id ON minion_jobs(id);
+
