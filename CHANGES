@@ -2,6 +2,15 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Fixed check for expired parent jobs when dequeuing. Thanks @a-leelan
+    and @GrantStreetGroup for fixing this bug! [Github #43]
+
+  - Dropped useless index on minion_jobs table (now that it has
+    a primary key). Thanks @a-leelan and @GrantStreetGroup for fixing
+    this! [Github #43]
+
 1.003     2023-09-21 17:39:03-05:00 America/Chicago
 
   [Fixed]
