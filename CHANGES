@@ -2,6 +2,8 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+1.004     2023-10-31 12:18:42-05:00 America/Chicago
+
   [Fixed]
 
   - Fixed check for expired parent jobs when dequeuing. Thanks @a-leelan
