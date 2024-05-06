@@ -2,6 +2,8 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+1.005     2024-05-06 09:43:27-05:00 America/Chicago
+
   [Fixed]
 
   - Added index to improve performance for deleting old, finished jobs.
