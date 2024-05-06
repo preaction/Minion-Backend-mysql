@@ -7,7 +7,7 @@ Minion::Backend::mysql
 
 # VERSION
 
-version 1.004
+version 1.005
 
 # SYNOPSIS
 
@@ -429,6 +429,7 @@ for more information about this problem and how to correct it.
 - Larry Leszczynski <larryl@emailplus.org>
 - Olaf Alders <olaf@wundersolutions.com>
 - Paul Cochrane <paul@liekut.de>
+- Peter Joh <peter.joh@grantstreet.com>
 - Sergey Andreev <40195653+saintserge@users.noreply.github.com>
 - Zoffix Znet <cpan@zoffix.com>
 
