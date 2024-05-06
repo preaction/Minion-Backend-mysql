@@ -1298,3 +1298,9 @@ DROP INDEX id ON minion_jobs;
 -- 15 down
 CREATE UNIQUE INDEX id ON minion_jobs(id);
 
+-- 16 up
+CREATE INDEX minion_jobs_state_finished_idx ON minion_jobs (state, finished) ALGORITHM=INPLACE LOCK=NONE;
+
+-- 16 down
+CREATE UNIQUE INDEX id ON minion_jobs(id);
+DROP INDEX minion_jobs_state_finished_idx ON minion_jobs;
