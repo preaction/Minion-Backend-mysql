@@ -2,6 +2,8 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+1.006     2024-05-22 12:55:45-05:00 America/Chicago
+
   [Fixed]
 
   - Fixed locking for schema version 16 upgrade. Thanks @GSGpeterjoh and
