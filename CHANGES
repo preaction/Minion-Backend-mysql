@@ -2,6 +2,11 @@ Revision history for Perl extension Minion::Backend::mysql.
 
 {{ $NEXT }}
 
+  [Fixed]
+
+  - Fixed performance of many short (<1 second) jobs by prefetching. See
+    the docs for details and tweaks.
+
 1.006     2024-05-22 12:55:45-05:00 America/Chicago
 
   [Fixed]

@@ -7,7 +7,7 @@ Minion::Backend::mysql
 
 # VERSION
 
-version 1.006
+version 1.007
 
 # SYNOPSIS
 
@@ -33,7 +33,7 @@ version 1.006
 
 # DESCRIPTION
 
-[Minion::Backend::mysql](https://metacpan.org/pod/Minion::Backend::mysql) is a backend for [Minion](https://metacpan.org/pod/Minion) based on [Mojo::mysql](https://metacpan.org/pod/Mojo::mysql). All
+[Minion::Backend::mysql](https://metacpan.org/pod/Minion%3A%3ABackend%3A%3Amysql) is a backend for [Minion](https://metacpan.org/pod/Minion) based on [Mojo::mysql](https://metacpan.org/pod/Mojo%3A%3Amysql). All
 necessary tables will be created automatically with a set of migrations named
 `minion`. This backend requires at least v5.6.5 of MySQL.
 
@@ -43,7 +43,7 @@ Minion::Backend::mysql - MySQL backend
 
 # ATTRIBUTES
 
-[Minion::Backend::mysql](https://metacpan.org/pod/Minion::Backend::mysql) inherits all attributes from [Minion::Backend](https://metacpan.org/pod/Minion::Backend) and
+[Minion::Backend::mysql](https://metacpan.org/pod/Minion%3A%3ABackend%3A%3Amysql) inherits all attributes from [Minion::Backend](https://metacpan.org/pod/Minion%3A%3ABackend) and
 implements the following new ones.
 
 ## mysql
@@ -51,7 +51,7 @@ implements the following new ones.
     my $mysql   = $backend->mysql;
     $backend = $backend->mysql(Mojo::mysql->new);
 
-[Mojo::mysql](https://metacpan.org/pod/Mojo::mysql) object used to store all data.
+[Mojo::mysql](https://metacpan.org/pod/Mojo%3A%3Amysql) object used to store all data.
 
 ## no\_txn
 
@@ -66,7 +66,7 @@ complete).
 
 # METHODS
 
-[Minion::Backend::mysql](https://metacpan.org/pod/Minion::Backend::mysql) inherits all methods from [Minion::Backend](https://metacpan.org/pod/Minion::Backend) and
+[Minion::Backend::mysql](https://metacpan.org/pod/Minion%3A%3ABackend%3A%3Amysql) inherits all methods from [Minion::Backend](https://metacpan.org/pod/Minion%3A%3ABackend) and
 implements the following new ones.
 
 ## dequeue
@@ -279,7 +279,7 @@ Returns the same information as ["worker\_info"](#worker_info) but in batches.
 
     my $backend = Minion::Backend::mysql->new('mysql://mysql@/test');
 
-Construct a new [Minion::Backend::mysql](https://metacpan.org/pod/Minion::Backend::mysql) object.
+Construct a new [Minion::Backend::mysql](https://metacpan.org/pod/Minion%3A%3ABackend%3A%3Amysql) object.
 
 ## register\_worker
 
@@ -392,6 +392,27 @@ These fields are currently available:
 
     Time worker was started.
 
+# PREFETCH AND JOB VOLUME
+
+Currently, the query to look for the next job to run is slower than it
+could be. Between all the features like dependencies, priorities, retries,
+and expiration, the query is complicated and requires some expensive data
+manipulation. It still generally runs in less than one second even for
+hundreds of thousands of jobs, but if jobs take less than one second
+to process, a worker will end up spending most of its time looking up
+new jobs to run, and wasting all the effort it took to get those pending
+jobs in the right order.
+
+With v1.007, this backend prefetches a number of jobs in one query. These
+jobs are then fed to worker processes as they ask. If a job is already claimed,
+the worker tries again to claim the next job.
+
+If you are not seeing the throughput you expect, and your jobs are shorter
+than one second, you can change the `$Minion::Backend::mysql::PREFETCH` value
+to be higher. A good goal is for a worker to perform work for a few seconds before
+going back to the database. The prefetch cache expires after 30 seconds (which
+can be adjusted with `$Minion::Backend::mysql::PREFETCH_EXPIRY`).
+
 # ERRORS
 
 ## DBD::mysql::st execute failed: Table '\*.minion\_workers' doesn't exist
@@ -411,7 +432,7 @@ for more information about this problem and how to correct it.
 
 # SEE ALSO
 
-[Minion](https://metacpan.org/pod/Minion), [Mojolicious::Guides](https://metacpan.org/pod/Mojolicious::Guides), [http://mojolicio.us](http://mojolicio.us).
+[Minion](https://metacpan.org/pod/Minion), [Mojolicious::Guides](https://metacpan.org/pod/Mojolicious%3A%3AGuides), [http://mojolicio.us](http://mojolicio.us).
 
 # AUTHORS
 
@@ -426,7 +447,6 @@ for more information about this problem and how to correct it.
 - Hu Yin <huyin8@gmail.com>
 - Jason A. Crome <jcrome@empoweredbenefits.com>
 - Larry Leszczynski <larryl@cpan.org>
-- Larry Leszczynski <larryl@emailplus.org>
 - Olaf Alders <olaf@wundersolutions.com>
 - Paul Cochrane <paul@liekut.de>
 - Peter Joh <peter.joh@grantstreet.com>
