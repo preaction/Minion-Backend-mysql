@@ -304,6 +304,13 @@ subtest 'Exclusive lock' => sub {
   ok !$minion->unlock('foo'), 'not unlocked again';
   ok $minion->lock('yada', 3600, {limit => 1}), 'locked';
   ok !$minion->lock('yada', 3600, {limit => 1}), 'not locked again';
+  ok $minion->lock('short', 1),  'short lock';
+  ok $minion->is_locked('short'), 'lock exists';
+  sleep 2;
+  ok !$minion->is_locked('short'), 'short lock has expired';
+  ok $minion->lock('short', 1),  'short lock again, previous should expire already';
+  ok !$minion->lock('short', 1), 'lock short again';
+  ok $minion->unlock('short'),   'unlock short';
 };
 
 subtest 'Shared lock' => sub {
