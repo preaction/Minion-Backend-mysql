@@ -1736,7 +1736,10 @@ __DATA__
 @@ minion
 -- 13 up
 CREATE TABLE IF NOT EXISTS minion_jobs (
-  `id`       BIGINT NOT NULL AUTO_INCREMENT UNIQUE,
+  -- The primary key is created with the table, so servers that refuse a
+  -- table without one (sql_require_primary_key, Percona XtraDB Cluster's
+  -- pxc_strict_mode) can install. UNIQUE stays for migration 15 to drop.
+  `id`       BIGINT NOT NULL AUTO_INCREMENT UNIQUE PRIMARY KEY,
   `args`     MEDIUMBLOB NOT NULL,
   `created`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `delayed`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1836,7 +1839,20 @@ DROP TABLE IF EXISTS minion_jobs;
 DROP FUNCTION minion_lock;
 
 -- 14 up
-ALTER TABLE minion_jobs ADD CONSTRAINT minion_jobs_pk_id PRIMARY KEY (id), ALGORITHM=INPLACE, LOCK=NONE;
+-- Only where migration 13 ran before it created the primary key. Without
+-- ALGORITHM/LOCK the server still picks the online operation where it can;
+-- naming LOCK=NONE made it fail on Galera, which refuses it for this change.
+SET @minion_jobs_pk = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE minion_jobs ADD CONSTRAINT minion_jobs_pk_id PRIMARY KEY (id)',
+    'DO 0')
+  FROM information_schema.table_constraints
+  WHERE table_schema = DATABASE() AND table_name = 'minion_jobs'
+    AND constraint_type = 'PRIMARY KEY'
+);
+PREPARE minion_jobs_pk FROM @minion_jobs_pk;
+EXECUTE minion_jobs_pk;
+DEALLOCATE PREPARE minion_jobs_pk;
 
 -- 14 down
 ALTER TABLE minion_jobs DROP PRIMARY KEY;
